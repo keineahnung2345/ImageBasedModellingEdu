@@ -47,6 +47,7 @@ Matching::count_consistent_matches (Matching::Result const& matches)
     return counter;
 }
 
+//將兩種result拼接在一起
 void
 Matching::combine_results(Matching::Result const& sift_result,
     Matching::Result const& surf_result, Matching::Result* result)
@@ -59,6 +60,7 @@ Matching::combine_results(Matching::Result const& sift_result,
 
     /* Combine results. */
     result->matches_1_2.clear();
+    //std::vector::reverse: Request a change in capacity
     result->matches_1_2.reserve(num_matches_1);
     result->matches_1_2.insert(result->matches_1_2.end(),
         sift_result.matches_1_2.begin(), sift_result.matches_1_2.end());
@@ -72,10 +74,17 @@ Matching::combine_results(Matching::Result const& sift_result,
     result->matches_2_1.insert(result->matches_2_1.end(),
         surf_result.matches_2_1.begin(), surf_result.matches_2_1.end());
 
+    //新的result是sift跟surf的result拼接在一起
+
     /* Fix offsets. */
     std::size_t surf_offset_1 = sift_result.matches_1_2.size();
     std::size_t surf_offset_2 = sift_result.matches_2_1.size();
 
+    /*
+    如果sift_result.matches_2_1非空,
+    代表surf_result往後移了surf_offset_2個位置,
+    所以才要更新result->matches_1_2中的surf所對應到的index
+    */
     if (surf_offset_2 > 0)
         for (std::size_t i = surf_offset_1; i < result->matches_1_2.size(); ++i)
             if (result->matches_1_2[i] >= 0)

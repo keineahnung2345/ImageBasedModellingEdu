@@ -14,6 +14,11 @@ using namespace sfm;
 namespace
 {
 #if DISCRETIZE_DESCRIPTORS
+    //用unsigned short或short表示
+    /*
+    short佔2bytes=16bits,可表示256個值
+    unsigned short:可表示0~255
+    */
     void
     convert_descriptor (Sift::Descriptor const& descr, unsigned short* data)
     {
@@ -26,6 +31,10 @@ namespace
         }
     }
 
+    /*
+    short可表示256個值,
+    signed short:可表示-128~127
+    */
     void
     convert_descriptor (Surf::Descriptor const& descr, signed short* data)
     {
@@ -38,6 +47,7 @@ namespace
         }
     }
 #else // DISCRETIZE_DESCRIPTORS
+    //用浮點數表示
     void
     convert_descriptor (Sift::Descriptor const& descr, float* data)
     {
@@ -84,6 +94,7 @@ ExhaustiveMatching::init_sift (SiftDescriptors* dst,
     for (std::size_t i = 0; i < src.size(); ++i, ptr += 128)
     {
         Sift::Descriptor const& d = src[i];
+        //將xxx::Descriptor轉為陣列
         convert_descriptor(d, ptr);
     }
 }
@@ -139,6 +150,7 @@ ExhaustiveMatching::pairwise_match (int view_1_id, int view_2_id,
     Matching::combine_results(sift_result, surf_result, result);
 }
 
+//SIFT優先,然後match SURF,最多匹配num_features個?
 int
 ExhaustiveMatching::pairwise_match_lowres (int view_1_id, int view_2_id,
     std::size_t num_features) const
