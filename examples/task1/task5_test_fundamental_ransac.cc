@@ -64,12 +64,21 @@ int  calc_ransac_iterations (double p,
 double  calc_sampson_distance (FundamentalMatrix const& F, sfm::Correspondence2D2D const& m) {
 
     double p2_F_p1 = 0.0;
+    /*
+    令p1為(u1,v1,1), p2為(u2,v2,1), 
+    f = (F11, F12, F13, F21, F22, F23, F31, F32, F33), 則:
+    p2^T * F * p1 = (u2u1, u2v1, u2, v2u1, v2v1, v2, u1, v1, 1) dot f
+    */
     p2_F_p1 += m.p2[0] * (m.p1[0] * F[0] + m.p1[1] * F[1] + F[2]);
     p2_F_p1 += m.p2[1] * (m.p1[0] * F[3] + m.p1[1] * F[4] + F[5]);
     p2_F_p1 +=     1.0 * (m.p1[0] * F[6] + m.p1[1] * F[7] + F[8]);
     p2_F_p1 *= p2_F_p1;
 
     double sum = 0.0;
+    /*
+    F dot p1   = (F11*u1+F12*v1+F13, F21*u1+F22*v1+F23, F31*u1+F32*v1+F33)^T
+    p2^T dot F = (F11*u2+F21*v2+F31, F12*u2+F22*v2+F32, F13*u2+F23*v2+F33)
+    */
     sum += math::fastpow(m.p1[0] * F[0] + m.p1[1] * F[1] + F[2], 2);
     sum += math::fastpow(m.p1[0] * F[3] + m.p1[1] * F[4] + F[5], 2);
     sum += math::fastpow(m.p2[0] * F[0] + m.p2[1] * F[3] + F[6], 2);
@@ -89,24 +98,33 @@ void calc_fundamental_8_point (math::Matrix<double, 3, 8> const& pset1
 ){
     /* direct linear transform */
     math::Matrix<double, 8, 9> A;
+    //遍歷8對點
     for(int i=0; i<8; i++)
     {
         math::Vec3d p1  = pset1.col(i);
         math::Vec3d p2 = pset2.col(i);
 
-        A(i, 0) = p1[0]*p2[0];
-        A(i, 1) = p1[1]*p2[0];
-        A(i, 2) = p2[0];
-        A(i, 3) = p1[0]*p2[1];
-        A(i, 4) = p1[1]*p2[1];
-        A(i, 5) = p2[1];
-        A(i, 6) = p1[0];
-        A(i, 7) = p1[1];
-        A(i, 8) = 1.0;
+        //p1 = (u1, v1, 1), p2 = (u2, v2, 1)
+        A(i, 0) = p1[0]*p2[0]; //u1u2
+        A(i, 1) = p1[1]*p2[0]; //v1u2
+        A(i, 2) = p2[0];       //u2
+        A(i, 3) = p1[0]*p2[1]; //u1v2
+        A(i, 4) = p1[1]*p2[1]; //v1v2
+        A(i, 5) = p2[1];       //v2
+        A(i, 6) = p1[0];       //u1
+        A(i, 7) = p1[1];       //v1
+        A(i, 8) = 1.0;         //1
     }
 
+    /*
+    根據課件p.28,
+    A^T * A的最小特徵值對應的特徵向量為基礎矩陣的解
+    */
     math::Matrix<double, 9, 9> vv;
+    //特徵值分解是做SVD?
+    //為何是用A做分解,不是A^T * A?
     math::matrix_svd<double, 8, 9>(A, nullptr, nullptr, &vv);
+    //v代表特徵向量? 有排序過? 最後一個col代表最小的?
     math::Vector<double, 9> f = vv.col(8);
 
     F(0,0) = f[0]; F(0,1) = f[1]; F(0,2) = f[2];
@@ -125,6 +143,7 @@ void calc_fundamental_8_point (math::Matrix<double, 3, 8> const& pset1
  * @param matches--输入的匹配对 大于8对
  * @param F --基础矩阵
  */
+//實現跟8點法幾乎一樣,只是A變成m(>=8) * 9的矩陣?
 void calc_fundamental_least_squares(sfm::Correspondences2D2D const & matches, FundamentalMatrix&F){
 
     if (matches.size() < 8)
@@ -134,15 +153,16 @@ void calc_fundamental_least_squares(sfm::Correspondences2D2D const & matches, Fu
     for (std::size_t i = 0; i < matches.size(); ++i)
     {
         sfm::Correspondence2D2D const& p = matches[i];
-        A[i * 9 + 0] = p.p2[0] * p.p1[0];
-        A[i * 9 + 1] = p.p2[0] * p.p1[1];
-        A[i * 9 + 2] = p.p2[0] * 1.0;
-        A[i * 9 + 3] = p.p2[1] * p.p1[0];
-        A[i * 9 + 4] = p.p2[1] * p.p1[1];
-        A[i * 9 + 5] = p.p2[1] * 1.0;
-        A[i * 9 + 6] = 1.0     * p.p1[0];
-        A[i * 9 + 7] = 1.0     * p.p1[1];
-        A[i * 9 + 8] = 1.0     * 1.0;
+        //p1 = (u1, v1, 1), p2 = (u2, v2, 1)
+        A[i * 9 + 0] = p.p2[0] * p.p1[0]; //u2u1
+        A[i * 9 + 1] = p.p2[0] * p.p1[1]; //u2v1
+        A[i * 9 + 2] = p.p2[0] * 1.0;     //u2
+        A[i * 9 + 3] = p.p2[1] * p.p1[0]; //v2u1
+        A[i * 9 + 4] = p.p2[1] * p.p1[1]; //v2v1
+        A[i * 9 + 5] = p.p2[1] * 1.0;     //v2
+        A[i * 9 + 6] = 1.0     * p.p1[0]; //u1
+        A[i * 9 + 7] = 1.0     * p.p1[1]; //v1
+        A[i * 9 + 8] = 1.0     * 1.0;     //1
     }
 
     /* Compute fundamental matrix using SVD. */
