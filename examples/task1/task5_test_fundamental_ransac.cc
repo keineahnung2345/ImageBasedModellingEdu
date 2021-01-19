@@ -199,6 +199,7 @@ std::vector<int> find_inliers(sfm::Correspondences2D2D const & matches
     /** Reference
     for(int i=0; i< matches.size(); i++){
         double error = calc_sampson_distance(F, matches[i]);
+        //為何是跟squared_thresh而非thresh做比較?
         if(error< squared_thresh){
             inliers.push_back(i);
         }
