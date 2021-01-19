@@ -176,6 +176,14 @@ std::vector<int> find_inliers(sfm::Correspondences2D2D const & matches
      * TODO HERE
      *
      * Coding here **/
+    for (std::size_t i = 0; i < matches.size(); ++i){
+        sfm::Correspondence2D2D const& match = matches[i];
+        double dist = calc_sampson_distance(F, match);
+        // if(dist < thresh){
+        if(dist < squared_thresh){
+            inliers.push_back(i);
+        }
+    }
 
     /** Reference
     for(int i=0; i< matches.size(); i++){
