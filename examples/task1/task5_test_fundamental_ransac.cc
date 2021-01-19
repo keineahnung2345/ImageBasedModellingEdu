@@ -41,7 +41,8 @@ int  calc_ransac_iterations (double p,
 
     /** TODO HERE
      * Coding here**/
-    return 0;
+    int M = static_cast<int>(log(1-z)/log(1-pow(p, K)));
+    return M;
 
 
     /** Reference
