@@ -32,9 +32,11 @@ public:
     struct Options
     {
         /** Number of bucket groups. */
+        //table數(論文裡的L)
         uint8_t num_bucket_groups = 6;
 
         /** Number of buckets (2^num_bucket_bits) per bucket group. */
+        //hashing的長度(論文裡的m)
         uint8_t num_bucket_bits = 8;
 
         /** Minimum number of top ranked candidates to collect. */
@@ -85,6 +87,10 @@ private:
     template <typename T>
     struct ProjMats
     {
+        /*
+        Cascade Hashing的第二步:影影到n維空間
+        這裡n取的跟特徵點的長度一樣?
+        */
         /**
          * Primary projection matrix. The number of vectors/Ts determines the
          * size of the bit vector that is computed and used for computing the
@@ -95,6 +101,9 @@ private:
          */
         std::vector<T> prim_proj_mat;
 
+        /*
+        Cascade Hashing的第一步:L張hashing table,每張hashing table有m個buckets
+        */
         /**
          * Secondary projection matrices. The number of Ts is the number of
          * buckets per bucket group (see Options::num_bucket_bits).
@@ -103,6 +112,8 @@ private:
         std::vector<std::vector<T>> sec_proj_mats;
     };
 
+    //為何T是Vec不是純量?
+    //這是bucket?裡面存的就是特徵向量本身?
     typedef ProjMats<math::Vec64f>  ProjMatsSurf;
     typedef ProjMats<math::Vec128f> ProjMatsSift;
 
@@ -227,6 +238,7 @@ void CascadeHashing::GlobalData::generate_proj_matrices (
     std::vector<T>* prim_hash, std::vector<std::vector<T>>* sec_hash,
     Options const& cashash_opts)
 {
+    //描述子長度
     int const dim_desc = T::dim;
     int const dim_hash_data = dim_desc;
 
@@ -241,14 +253,19 @@ void CascadeHashing::GlobalData::generate_proj_matrices (
         for (uint8_t j = 0; j < dim_desc; j++)
             (*prim_hash)[i][j] = dis(prng_mt);
 
+    //T張表
     uint8_t const num_bucket_groups = cashash_opts.num_bucket_groups;
+    //每張表裡存放的是長度為m的字串(每個字元是0或1)
     uint8_t const num_bucket_bits = cashash_opts.num_bucket_bits;
 
     sec_hash->resize(num_bucket_groups, std::vector<T>(num_bucket_bits));
 
     /* Generate values for secondary hashing function. */
+    //遍歷每張表
     for (uint8_t group_idx = 0; group_idx < num_bucket_groups; group_idx++)
+        //遍歷待會要生成的每個bit
         for (uint8_t i = 0; i < num_bucket_bits; i++)
+            //一個bit是由長度為dim_desc的向量與描述子做內積後得到
             for (uint8_t j = 0; j < dim_desc; j++)
                 (*sec_hash)[group_idx][i][j] = dis(prng_mt);
 }
@@ -264,47 +281,67 @@ CascadeHashing::compute_cascade_hashes (std::vector<T> const& zero_mean_descs,
     std::vector<std::vector<T>> const& sec_proj_mats,
     Options const& cashash_opts)
 {
+    //描述子的長度
     int const dim_desc = T::dim;
     int const dim_hash_data = dim_desc;
+    //?
     uint8_t const dim_comp_hash_data = dim_hash_data / 64;
     uint8_t const num_bucket_bits = cashash_opts.num_bucket_bits;
     uint8_t const num_bucket_grps = cashash_opts.num_bucket_groups;
 
     /* Allocate memory. */
+    //多少個描述子
     size_t num_descs = zero_mean_descs.size();
     comp_hash_data->resize(num_descs * dim_comp_hash_data);
     bucket_grps_bucket_ids->resize(num_bucket_grps, std::vector<uint16_t>(num_descs));
 
     for (size_t i = 0; i < num_descs; i++)
     {
+        //描述子
         T const& desc = zero_mean_descs[i];
 
         /* Compute hash code. */
+        //這一步是在做hash remapping?把SIFT或SURF描述子都映射成長度64的hash code?
         for (uint8_t j = 0; j < dim_comp_hash_data; j++)
         {
+            //comp_hash是長度為64的字串,每個字元是0或1
             uint64_t comp_hash = 0;
             uint8_t data_start = j * 64;
             uint8_t data_end = (j + 1) * 64;
             for (uint8_t k = data_start; k < data_end; k++)
             {
+                //與描述子等長的超平面參數
                 T const& proj_vec = prim_proj_mat[k];
+                //描述子與超平面的有號距離
                 float sum = desc.dot(proj_vec);
+                //comp_hash的每個字元是0或1
                 comp_hash = (comp_hash << 1) | (sum > 0.0f);
             }
+            /*
+            因為data_start與data_end的差為64,
+            所以算出來的comp_hash是範圍在[0,2^64-1]內的數字,
+            也就是長度為64,每個字元是0或1的字串
+            */
             (*comp_hash_data)[i * dim_comp_hash_data + j] = comp_hash;
         }
 
         /* Determine the descriptor's bucket index for each bucket group. */
         for (uint8_t grp_idx = 0; grp_idx < num_bucket_grps; grp_idx++)
         {
+            //bucket_id是num_bucket_bits長度的字串,每個字元是0或1
             uint16_t bucket_id = 0;
             for (uint8_t bit_idx = 0; bit_idx < num_bucket_bits; bit_idx++)
             {
+                //與描述子等長的超平面參數
                 T const& proj_vec = sec_proj_mats[grp_idx][bit_idx];
+                //描述子與超平面的有號距離
                 float sum = desc.dot(proj_vec);
+                //bucket_id的每個字元是0或1
                 bucket_id = (bucket_id << 1) | (sum > 0.0f);
             }
 
+            //grp_idx:表的id(表共L張)
+            //i:特徵向量的id
             (*bucket_grps_bucket_ids)[grp_idx][i] = bucket_id;
         }
     }
@@ -425,23 +462,32 @@ CascadeHashing::collect_features_from_buckets (
     std::vector<uint64_t> const& comp_hash_data2) const
 {
     size_t num_bucket_grps = bucket_grps_bucket_ids.size();
+    //遍歷L張hashing table
     for (size_t grp_idx = 0; grp_idx < num_bucket_grps; grp_idx++)
     {
+        //在第grp_idx個table中,第feature_id個feature是屬於第幾個bucket
         uint8_t bucket_id = bucket_grps_bucket_ids[grp_idx][feature_id];
+        //在第grp_idx個table的第bucket_id個bucket裡有哪些feature(記錄它們的id)
         BucketFeatureIDs const& bucket_feature_ids = bucket_grps_feature_ids[grp_idx][bucket_id];
 
+        //遍歷同屬一個bucket的feature
         for (size_t j = 0; j < bucket_feature_ids.size(); j++)
         {
+            //candidate的feature id
             size_t candidate_id = bucket_feature_ids[j];
+            //有可能選到重複的candidate_id
             if ((*data_index_used)[candidate_id])
                 continue;
 
             uint64_t const *ptr2 = &comp_hash_data2[candidate_id * DIMHASH / 64];
             int hamming_dist = 0;
+            //hamming_dist: comp_hash_data1與ptr2有多少個bit不同
             for (int k = 0; k < (DIMHASH / 64); k++)
                 hamming_dist += math::popcount(comp_hash_data1[k] ^ ptr2[k]);
 
+            //grouped_features: 一個以hamming distance為key的hashing table
             (*grouped_features)[hamming_dist].emplace_back(candidate_id);
+            //已經把candidate_id這個feature分配到grouped_features這個hashing table裡了
             (*data_index_used)[candidate_id] = true;
         }
     }
@@ -454,13 +500,16 @@ CascadeHashing::collect_top_ranked_candidates (
     uint8_t dim_hash_data, uint16_t min_num_candidates,
     uint16_t max_num_candidates) const
 {
+    //hash_dist: [0, dim_hash_data]
     for (uint16_t hash_dist = 0; hash_dist <= dim_hash_data; hash_dist++)
     {
         for (size_t j = 0; j < grouped_features[hash_dist].size(); j++)
         {
+            //與query point的hamming distance為hash_dist的某feature的id
             uint32_t idx2 = grouped_features[hash_dist][j];
             top_candidates->emplace_back(idx2);
 
+            //一旦收集到max_num_candidates(K)個最近鄰就跳出
             if (top_candidates->size() >= max_num_candidates)
                 break;
         }
