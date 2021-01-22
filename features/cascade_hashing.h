@@ -154,6 +154,7 @@ private:
          * ProjMats::prim_proj_mat. It is compressed in the sense that the bits
          * are tightly packed into uint64_ts.
          */
+        //論文2.2.2的Hashing Remapping?用ProjMats::prim_proj_mat與特徵做內積得到
         std::vector<uint64_t> comp_hash_data;
 
         /**
@@ -161,6 +162,10 @@ private:
          * group, i.e. bucket_grps_bucket_ids[2][64] = 8 means that in bucket
          * group 2 feature 64 is assigned to bucket 8.
          */
+        /*
+        BucketGroupsBuckets: std::vector<std::vector<uint16_t>>,
+        表示在第幾個group(table)裡,第幾個feature被分配到哪一個bucket
+        */
         BucketGroupsBuckets bucket_grps_bucket_ids;
 
         /**
@@ -168,6 +173,10 @@ private:
          * bucket_grps_feature_ids[2][8][4] = 6 means that the 4th feature in
          * bucket 8 of bucket group 2 is the feature with the ID 6.
          */
+        /*
+        BucketGroupsFeatures: std::vector<std::vector<std::vector<std::size_t>>>
+        表示在第幾個group(table)裡的第幾個bucket裡的第幾個feature的id是多少
+        */
         BucketGroupsFeatures bucket_grps_feature_ids;
     };
 
@@ -387,7 +396,9 @@ CascadeHashing::oneway_match (Matching::Options const& matching_opts,
     uint8_t const dim_hash_data = descriptor_length;
     uint32_t const dim_comp_hash_data = dim_hash_data / 64;
 
+    //表示set 1裡的點被匹配到set 2裡的第幾個點
     result->resize(set_1_size, -1);
+    //表示set 2裡的點是否已被匹配
     std::vector<bool> data_index_used(set_2_size);
     std::vector<std::vector<uint32_t> > grouped_features(dim_hash_data + 1);
     std::vector<uint32_t> top_candidates;

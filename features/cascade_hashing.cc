@@ -164,10 +164,12 @@ CascadeHashing::compute_avg_descriptors (ProcessedFeatureSets const& pfs,
 
         for (std::size_t j = 0; j < num_sift_descriptors; j++)
             for (int k = 0; k < 128; k++)
+                //除以255是?
                 sift_vec_sum[k] += sift_descr[j][k] / 255.0f;
 
         for (std::size_t j = 0; j < num_surf_descriptors; j++)
             for (int k = 0; k < 64; k++)
+                //除以127是?
                 surf_vec_sum[k] += surf_descr[j][k] / 127.0f;
     }
 
@@ -206,17 +208,21 @@ CascadeHashing::build_buckets(
 {
     uint8_t const num_bucket_grps = opts.num_bucket_groups;
     uint8_t const num_bucket_bits = opts.num_bucket_bits;
+    //一個group(table)裡的buckets數量
     uint32_t const num_buckets_per_group = 1 << num_bucket_bits;
 
     bucket_grps_feature_ids->resize(num_bucket_grps);
 
     for (uint8_t grp_idx = 0; grp_idx < num_bucket_grps; grp_idx++)
     {
+        //一個group(table)裡的所有buckets
         BucketGroupFeatures &bucket_grp_features = (*bucket_grps_feature_ids)[grp_idx];
         bucket_grp_features.resize(num_buckets_per_group);
         for (size_t i = 0; i < num_descs; i++)
         {
+            //第i個描述子被分到第bucket_id個bucket裡
             uint16_t bucket_id = bucket_grps_bucket_ids[grp_idx][i];
+            //第bucket_id個bucket裡有哪些描述子
             bucket_grp_features[bucket_id].emplace_back(i);
         }
     }
