@@ -98,10 +98,10 @@ FundamentalMatrix fundamental_8_point (math::Matrix<double, 3, 8> const& points1
         }
     }
 
-    math::Matrix<double, 3, 3> FS, FU, FV;
-    math::matrix_svd<double, 3, 3>(F, &FS, &FU, &FV);
-    FU(2, 2) = 0;
-    F = FS * FU * FV.transpose();
+    math::Matrix<double, 3, 3> FU, FS, FV;
+    math::matrix_svd<double, 3, 3>(F, &FU, &FS, &FV);
+    FS(2, 2) = 0;
+    F = FU * FS * FV.transpose();
 
     return F;
 #if 0
