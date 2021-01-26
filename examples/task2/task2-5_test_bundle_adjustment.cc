@@ -2,6 +2,7 @@
 #include <sfm/ransac_fundamental.h>
 #include <core/image_exif.h>
 #include <fstream>
+#include <cassert>
 #include "math/matrix.h"
 #include "math/vector.h"
 
