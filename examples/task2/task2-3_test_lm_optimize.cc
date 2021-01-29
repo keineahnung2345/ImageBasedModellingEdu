@@ -19,7 +19,7 @@
  *               增加信赖域(1/lambda)，使得求解算法接近于高斯牛顿法,加快收敛速度
  *               判断终止条件
  *           判断若求解失败
- *               减少信赖域(1/lambda), 使得求解算法解决域梯度下降法
+ *               减少信赖域(1/lambda), 使得求解算法接近于梯度下降法
  *       5)  重复1), 2), 3)，4)
  *
  * （注意，信赖域的大小为正规方程中lambda的倒数)
@@ -101,9 +101,13 @@ void load_data(const std::string& file_name
         for (int i = 0; i < cams.size(); i++) {
             getline(in, line);
             std::stringstream stream(line);
+            //f
             stream >> cams[i].focal_length;
+            //k0, k1
             stream >> cams[i].distortion[0] >> cams[i].distortion[1];
+            //t
             for (int j = 0; j < 3; j++)stream >> cams[i].translation[j];
+            //R
             for (int j = 0; j < 9; j++)stream >> cams[i].rotation[j];
         }
     }
@@ -148,6 +152,7 @@ void load_data(const std::string& file_name
  * Becase the resulting matrix is symmetric, only about half the work
  * needs to be performed.
  */
+//看不懂
 void matrix_block_column_multiply (sfm::ba::SparseMatrix<double> const& A,
 std::size_t block_size, sfm::ba::SparseMatrix<double>* B)
 {
@@ -157,16 +162,16 @@ std::size_t block_size, sfm::ba::SparseMatrix<double>* B)
         std::vector<sfm::ba::DenseVector<double>> columns(block_size);
         for (std::size_t col = 0; col < block_size; ++col)
             A.column_nonzeros(block + col, &columns[col]);
-            for (std::size_t col = 0; col < block_size; ++col) {
-                double dot = columns[col].dot(columns[col]);
-                triplets.emplace_back(block + col, block + col, dot);
-                for (std::size_t row = col + 1; row < block_size; ++row) {
-                    dot = columns[col].dot(columns[row]);
-                    triplets.emplace_back(block + row, block + col, dot);
-                    triplets.emplace_back(block + col, block + row, dot);
-                }
+        for (std::size_t col = 0; col < block_size; ++col) {
+            double dot = columns[col].dot(columns[col]);
+            triplets.emplace_back(block + col, block + col, dot);
+            for (std::size_t row = col + 1; row < block_size; ++row) {
+                dot = columns[col].dot(columns[row]);
+                triplets.emplace_back(block + row, block + col, dot);
+                triplets.emplace_back(block + col, block + row, dot);
             }
         }
+    }
     B->allocate(A.num_cols(), A.num_cols());
     B->set_from_triplets(triplets);
 }
@@ -241,11 +246,24 @@ invert_block_matrix_NxN_inplace (sfm::ba::SparseMatrix<double>* A, int blocksize
 void rodrigues_to_matrix (double const* r, double* m)
 {
     /* Obtain angle from vector length. */
+    // 用旋轉軸的norm表示旋轉角度
     double a = std::sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
     /* Precompute sine and cosine terms. */
+    // (1 - cos(||r||))/(||r||^2)
     double ct = (a == 0.0) ? 0.5f : (1.0f - std::cos(a)) / (2.0 * a);
+    // sin(||r||)/||r||
     double st = (a == 0.0) ? 1.0 : std::sin(a) / a;
+    // 應該是R = I + st * K + (1-ct) * K^2
     /* R = I + st * K + ct * K^2 (with cross product matrix K). */
+    /*
+          [ 0  -w2   w1]
+    K   = [ w2   0  -w0]
+          [-w1  w0    0]
+
+          [-w1^2-w2^2        w0w1        w0w2]
+    K^2 = [w0w1        -w0^2-w2^2        w1w2]
+          [w0w2              w1w2  -w0^2-w1^2]
+    */
     m[0] = 1.0 - (r[1] * r[1] + r[2] * r[2]) * ct;
     m[1] = r[0] * r[1] * ct - r[2] * st;
     m[2] = r[2] * r[0] * ct + r[1] * st;
@@ -278,6 +296,7 @@ void update_camera (sfm::ba::Camera const& cam,
     std::copy(cam.rotation, cam.rotation + 9, rot_orig);
     double rot_update[9];
     rodrigues_to_matrix(update + 6, rot_update);
+    //旋轉矩陣的更新是對原來的旋轉矩陣左乘delta的旋轉矩陣
     math::matrix_multiply(rot_update, 3, 3, rot_orig, 3, out->rotation);
 }
 
@@ -351,16 +370,19 @@ void compute_reprojection_errors (DenseVectorType* vector_f
                             , std::vector<sfm::ba::Point3D> *points
                             ,std::vector<sfm::ba::Observation> *observations)
 {
+    //*2: 因為要記錄x,y兩個方向上的誤差
     if (vector_f->size() != observations->size() * 2)
         vector_f->resize(observations->size() * 2);
 
 #pragma omp parallel for
     for (std::size_t i = 0; i < observations->size(); ++i)
     {
+        //二維平面上觀察到的點
         sfm::ba::Observation const& obs = observations->at(i);
         sfm::ba::Point3D const& p3d = points->at(obs.point_id);
         sfm::ba::Camera const& cam = cameras->at(obs.camera_id);
 
+        //sfm::ba::Camera裡focal_length是double,其餘是double的array
         double const* flen = &cam.focal_length; // 相机焦距
         double const* dist = cam.distortion;    // 径向畸变系数
         double const* rot = cam.rotation;       // 相机旋转矩阵
@@ -370,6 +392,7 @@ void compute_reprojection_errors (DenseVectorType* vector_f
         sfm::ba::Point3D new_point;
         sfm::ba::Camera new_camera;
 
+        // delta_x是用共軛梯度法求出來的
         // 如果delta_x 不为空，则先利用delta_x对相机和结构进行更新，然后再计算重投影误差
         if (delta_x != nullptr)
         {
@@ -382,6 +405,7 @@ void compute_reprojection_errors (DenseVectorType* vector_f
             dist = new_camera.distortion;
             rot = new_camera.rotation;
             trans = new_camera.translation;
+            // 因為delta_x是由相機參數的解和點座標的解concat起來的
             pt_id += cameras->size() * num_cam_params;
 
 
@@ -405,6 +429,8 @@ void compute_reprojection_errors (DenseVectorType* vector_f
         radial_distort(rp + 0, rp + 1, dist);
 
         /* Compute reprojection error. */
+        // (rp[0] * (*flen), rp[1] * (*flen))不用加(u0, v0)?
+        // x,y兩個方向上的誤差
         vector_f->at(i * 2 + 0) = rp[0] * (*flen) - obs.pos[0];
         vector_f->at(i * 2 + 1) = rp[1] * (*flen) - obs.pos[1];
     }
@@ -453,6 +479,7 @@ void my_jacobian(sfm::ba::Camera const& cam,
     const double r2 = x*x + y*y;
     const double distort = 1.0 + (k0 + k1*r2)*r2;
 
+    //不用加(u0,v0)?
     const double u = f* distort*x;
     const double v = f* distort*y;
 
@@ -558,6 +585,10 @@ void my_jacobian(sfm::ba::Camera const& cam,
  * @param jac_cam-- 观察点相对于相机参数的雅阁比矩阵
  * @param jac_points--观察点相对于三维点的雅阁比矩阵
  */
+/*
+Jacobian矩陣的row代表不同的函數,這裡是觀察點的u及v座標,
+col代表函數的不同參數,這裡是相機參數及三維點座標
+*/
 void analytic_jacobian (SparseMatrixType* jac_cam
                 , SparseMatrixType* jac_points) {
     assert(jac_cam);
@@ -600,6 +631,11 @@ void analytic_jacobian (SparseMatrixType* jac_cam
         /*jac_points中三维点对应的列数为point_id* 3*/
         std::size_t point_col = obs.point_id * 3;
 
+        /*
+        仍然可以將cam_triplets及point_triplets想成是矩陣,
+        但是每個元素變成SparseMatrixType::Triplet,
+        即帶row index及col index的元素
+        */
         for (int j = 0; j < num_cam_params; ++j) {
            cam_triplets.push_back(SparseMatrixType::Triplet(row_x, cam_col + j, cam_x_ptr[j]));
            cam_triplets.push_back(SparseMatrixType::Triplet(row_y, cam_col + j, cam_y_ptr[j]));
@@ -632,17 +668,17 @@ sfm::ba::LinearSolver::Status my_solve_schur (
         DenseVectorType* delta_x) {
 /*
  *   雅阁比矩阵：
- *           J = [Jc Jp]
- *   Jc是与相机相关的模块，Jp是与三维点相关的模块。
+ *           J = [Jc Jx]
+ *   Jc是与相机相关的模块，Jx是与三维点相关的模块。
  *   正规方程
- *          (J^TJ + lambda*I)delta_x = J^T(x - F)
+ *          (J^TJ + lambda*I)delta = J^T(x - F)
  *   进一步写为
- *   [ Jcc+ lambda*Icc   Jcp            ][delta_c]= [v]
- *   [ Jxp               Jpp+lambda*Ipp ][delta_p]  [w]
+ *   [ Jcc+ lambda*Icc   Jcx            ][delta_c]= [v]
+ *   [ Jcx               Jxx+lambda*Ixx ][delta_x]  [w]
  *
- *   B = Jcc, E = Jcp, C = Jpp
+ *   B = Jcc, E = Jcx, C = Jxx
  *  其中 Jcc = Jc^T* Jc, Jcx = Jc^T*Jx, Jxc = Jx^TJc, Jxx = Jx^T*Jx
- *      v = Jc^T(F-x), w = Jx^T(F-x), deta_x = [delta_c; delta_p]
+ *      v = Jc^T(x - F), w = Jx^T(x - F), delta = [delta_c; delta_x]
  */
 
     // 误差向量
@@ -677,15 +713,25 @@ sfm::ba::LinearSolver::Status my_solve_schur (
     C.mult_diagonal(1.0 + 1.0 / trust_region_radius);
     B.mult_diagonal(1.0 + 1.0 / trust_region_radius);
 
+/*   
+*    [ Jcc+ lambda*Icc   Jcx            ][delta_c]= [v]
+*    [ Jcx               Jxx+lambda*Ixx ][delta_x]  [w]
+即:
+     [ B   E ]
+     [ E^T C ]
+*/
+    
     /* 求解C矩阵的逆C = inv(Jx^T+Jx + lambda*Ixx)*/
     invert_block_matrix_3x3_inplace(&C);
 
-    /* 计算S矩阵的Schur补用于高斯消元. */
+    /* 计算S矩阵: C的Schur补用于高斯消元. */
     SparseMatrixType ET = E.transpose();
 
     // S = (Jcc+lambda*Icc) - Jc^T*Jx*inv(Jxx+ lambda*Ixx)*Jx^T*Jc
+    // 這裡的C已經取過inverse了
     SparseMatrixType S = B.subtract(E.multiply(C).multiply(ET));
     // rhs = v -  Jc^T*Jx*inv(Jxx+ lambda*Ixx)*w
+    // 這裡的C已經取過inverse了
     DenseVectorType rhs = v.subtract(E.multiply(C.multiply(w)));
 
     /* Compute pre-conditioner for linear system. */
@@ -702,6 +748,8 @@ sfm::ba::LinearSolver::Status my_solve_schur (
     cg_opts.tolerance = 1e-20;
     CGSolver solver(cg_opts);
     CGSolver::Status cg_status;
+    // 增量正規方程: S * delta_y = rhs
+    // 求解delta_y需要B^-1做什麼?
     cg_status = solver.solve(S, rhs, &delta_y, &precond);
 
     sfm::ba::LinearSolver::Status status;
@@ -723,13 +771,17 @@ sfm::ba::LinearSolver::Status my_solve_schur (
 
     /* 将相机参数带入到第二个方程中，求解三维点的参数. */
     /*E= inv(Jp^T Jp) (JpT.multiply(F)-Jc^T * Jp * delta_y)*/
+    // 這裡的C已經取過inverse了
     DenseVectorType delta_z = C.multiply(w.subtract(ET.multiply(delta_y)));
 
     /* Fill output vector. */
+    //相機數量*9
     std::size_t const jac_cam_cols = Jc.num_cols();
+    //點的數量*3
     std::size_t const jac_point_cols = Jp.num_cols();
     std::size_t const jac_cols = jac_cam_cols + jac_point_cols;
 
+    // delta_x:最終的解
     if (delta_x->size() != jac_cols)
         delta_x->resize(jac_cols, 0.0);
     for (std::size_t i = 0; i < jac_cam_cols; ++i)
@@ -781,12 +833,13 @@ void lm_optimization(std::vector<sfm::ba::Camera>*cameras
         DenseVectorType delta_x;
         sfm::ba::LinearSolver::Status cg_status = my_solve_schur(Jc, Jp, F, &delta_x);
 
-        //3.0 根据计算得到的偏移量，重新计算冲投影误差和均方误差，用于判断终止条件和更新条件.
+        //3.0 根据计算得到的偏移量，重新计算重投影误差和均方误差，用于判断终止条件和更新条件.
         double new_mse, delta_mse, delta_mse_ratio = 1.0;
 
         // 正规方程求解成功的情况下
         if (cg_status.success) {
             /*重新计算相机和三维点，计算重投影误差，注意原始的相机参数没有被更新*/
+            //"注意原始的相机参数没有被更新" -> 什麼意思?
             compute_reprojection_errors(&F_new, &delta_x, cameras, points, observations);
             /* 计算新的残差值 */
             new_mse = compute_mse(F_new);
@@ -800,6 +853,7 @@ void lm_optimization(std::vector<sfm::ba::Camera>*cameras
             delta_mse = 0.0;
         }
 
+        // 注意delta_mse是current_mse - new_mse
         // new_mse < current_mse表示残差值减少
         bool successful_iteration = delta_mse > 0.0;
 
@@ -882,6 +936,7 @@ int main(int argc, char* argv[])
 //    ba.print_status();
 
     // 将优化后的结果重新赋值
+    // 有兩台相機所以是2
     std::vector<sfm::CameraPose> new_cam_poses(2);
     std::vector<math::Vec2f> radial_distortion(2);
     std::vector<math::Vec3f> new_pts_3d(points.size());
@@ -889,6 +944,7 @@ int main(int argc, char* argv[])
         std::copy(cameras[i].translation, cameras[i].translation + 3, new_cam_poses[i].t.begin());
         std::copy(cameras[i].rotation, cameras[i].rotation + 9, new_cam_poses[i].R.begin());
         radial_distortion[i]=math::Vec2f(cameras[i].distortion[0], cameras[i].distortion[1]);
+        //相機的內參K矩陣是由fa,fb,u0,v0得到
         new_cam_poses[i].set_k_matrix(cameras[i].focal_length, 0.0, 0.0);
     }
     for(int i=0; i<new_pts_3d.size(); i++) {
