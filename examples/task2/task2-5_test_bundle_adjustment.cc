@@ -9,6 +9,7 @@
 #include "core/image_io.h"
 #include "core/image.h"
 #include "core/image_tools.h"
+#include "core/image_drawing.h"
 
 #include "sfm/camera_pose.h"
 #include "sfm/fundamental.h"
@@ -45,6 +46,7 @@ float extract_focal_len(const std::string& img_name)
     core::image::load_jpg_file(img_name.c_str(), &exif_str);
     core::image::ExifInfo exif = core::image::exif_extract(exif_str.c_str(), exif_str.size(), false);
     sfm::FocalLengthEstimate fl = sfm::extract_focal_length(exif);
+    // 用exiftool看是35mm,這裡確是0.972222 0?
     std::cout <<"Focal length: " <<fl.first << " " << fl.second << std::endl;
     return fl.first;
 }
