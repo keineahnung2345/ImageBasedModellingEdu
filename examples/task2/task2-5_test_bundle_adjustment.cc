@@ -160,6 +160,69 @@ bool calc_cam_poses(sfm::Correspondences2D2D const &matches
     return found_pose;
 }
 
+void radial_distort (double* x, double* y, double const* dist)
+{
+    double const radius2 = *x * *x + *y * *y;
+    double const factor = 1.0 + radius2 * (dist[0] + dist[1] * radius2);
+    *x *= factor;
+    *y *= factor;
+}
+
+void reproject(std::vector<double>& rps
+        , std::vector<sfm::ba::Camera>& cameras
+        , std::vector<sfm::ba::Point3D>& points
+        ,std::vector<sfm::ba::Observation>& observations){
+    if (rps.size() != observations.size() * 2)
+        rps.resize(observations.size() * 2);
+
+    // reproject new_pts_3d to image and show
+    #pragma omp parallel for
+    for (std::size_t i = 0; i < observations.size(); ++i)
+    {
+        //二維平面上觀察到的點
+        sfm::ba::Observation const& obs = observations.at(i);
+        sfm::ba::Point3D const& p3d = points.at(obs.point_id);
+        sfm::ba::Camera const& cam = cameras.at(obs.camera_id);
+
+        //sfm::ba::Camera裡focal_length是double,其餘是double的array
+        double const* flen = &cam.focal_length; // 相机焦距
+        double const* dist = cam.distortion;    // 径向畸变系数
+        double const* rot = cam.rotation;       // 相机旋转矩阵
+        double const* trans = cam.translation;  // 相机平移向量
+        double const* point = p3d.pos;          // 三维点坐标
+
+        sfm::ba::Point3D new_point;
+        sfm::ba::Camera new_camera;
+
+        /* Project point onto image plane. */
+        double rp[] = { 0.0, 0.0, 0.0 };
+        for (int d = 0; d < 3; ++d)
+        {
+            rp[0] += rot[0 + d] * point[d];
+            rp[1] += rot[3 + d] * point[d];
+            rp[2] += rot[6 + d] * point[d];
+        }
+        rp[2] = (rp[2] + trans[2]);
+        rp[0] = (rp[0] + trans[0]) / rp[2];
+        rp[1] = (rp[1] + trans[1]) / rp[2];
+
+        /* Distort reprojections. */
+        radial_distort(rp + 0, rp + 1, dist);
+
+        /* Compute reprojection error. */
+        rps.at(i * 2 + 0) = rp[0] * (*flen);
+        rps.at(i * 2 + 1) = rp[1] * (*flen);
+    }
+};
+
+void denormalize(const float& fnorm, 
+        const float& fwidth, 
+        const float& fheight,
+        double& u, 
+        double& v){
+    u = u * fnorm + fwidth / 2.0f - 0.5f;
+    v = v * fnorm + fheight / 2.0f - 0.5f;
+};
 
 int
 main (int argc, char *argv[])
@@ -216,6 +279,31 @@ main (int argc, char *argv[])
 //                 <<" "<< corrs[i].p2[0]<<" "<<corrs[i].p2[1]<<std::endl;
 //    }
 
+    core::ByteImage::Ptr img1_drawn(img1), img2_drawn(img2);
+    unsigned char color_rgb_red[3] = { 255, 0, 0 };
+    unsigned char color_rgb_blue[3] = { 0, 0, 255 };
+    float const f1width = static_cast<float>(feat1.width);
+    float const f1height = static_cast<float>(feat1.height);
+    float const f1norm = std::max(f1width, f1height);
+    float const f2width = static_cast<float>(feat2.width);
+    float const f2height = static_cast<float>(feat2.height);
+    float const f2norm = std::max(f2width, f2height);
+    for(sfm::Correspondence2D2D& corr : corrs){
+        // denormalize image coordinates
+        double p1u = corr.p1[0];
+        double p1v = corr.p1[1];
+        double p2u = corr.p2[0];
+        double p2v = corr.p2[1];
+        denormalize(f1norm, f1width, f1height, p1u, p1v);
+        denormalize(f2norm, f2width, f2height, p2u, p2v);
+        
+        std::cout << "corr: (" << p1u << ", " << p1v << 
+            ") <-> (" << p2u << ", " << p2v << ")" << std::endl;
+        core::image::draw_circle<uint8_t>(*img1_drawn, p1u, p1v, 2, color_rgb_red);
+        core::image::draw_circle<uint8_t>(*img2_drawn, p2u, p2v, 2, color_rgb_red);
+    }
+    core::image::save_file(img1_drawn, std::string("img1_drawn.jpg"));
+    core::image::save_file(img2_drawn, std::string("img2_drawn.jpg"));
 
     if(corrs.size()<8){
         std::cerr<<" Number of matching pairs should not be less than 8."<<std::endl;
@@ -232,6 +320,7 @@ main (int argc, char *argv[])
 
     /* 三角化 */
     std::vector<math::Vec3f> pts_3d;
+    sfm::Correspondences2D2D corrs_filtered;
     for(int i=0; i<corrs.size(); i++)
     {
         math::Vec3f pt_3d = sfm::triangulate_match(corrs[i], pose1, pose2);
@@ -241,6 +330,7 @@ main (int argc, char *argv[])
             continue;
 
         pts_3d.push_back(pt_3d);
+        corrs_filtered.push_back(corrs[i]);
     }
     std::cout<<"Successful triangulation:  "<<pts_3d.size()<<" points"<<std::endl;
 //    for(int i=0; i<pts_3d.size(); i++)
@@ -373,13 +463,56 @@ main (int argc, char *argv[])
     std::cout<<"  R: "<<new_cam_poses[1].R<<std::endl;
     std::cout<<"  t: "<<new_cam_poses[1] .t<<std::endl;
 
-
+    std::ofstream fold_pts_3d("pts_3d.txt");
+    std::ofstream fnew_pts_3d("new_pts_3d.txt");
     std::cout<<"points 3d: "<<std::endl;
     for(int i=0; i<pts_3d.size(); i++) {
         std::cout<<"( "<<pts_3d[i][0]<<", "<<pts_3d[i][1]<<", "<<pts_3d[i][2]<<" )";
         std::cout<<"-->";
         std::cout<<"( "<<new_pts_3d[i][0]<<", "<<new_pts_3d[i][1]<<", "<<new_pts_3d[i][2]<<" )"<<std::endl;
+        fold_pts_3d << pts_3d[i][0]<<" "<<pts_3d[i][1]<<" "<<pts_3d[i][2] << "\n";
+        fnew_pts_3d << new_pts_3d[i][0]<<" "<<new_pts_3d[i][1]<<" "<<new_pts_3d[i][2] << "\n";
     }
+    fold_pts_3d.close();
+    fnew_pts_3d.close();
+
+    std::vector<double> rps;
+    //注意p3ds是BA優化過的
+    reproject(rps, cams, p3ds, observations);
+
+    std::vector<core::ByteImage::Ptr> reprojected_imgs(2);
+    reprojected_imgs[0] = core::ByteImage::Ptr(img1);
+    reprojected_imgs[1] = core::ByteImage::Ptr(img2);
+    for(int i = 0; i < corrs_filtered.size(); ++i){
+        // denormalize image coordinates
+        double p1u = corrs_filtered[i].p1[0];
+        double p1v = corrs_filtered[i].p1[1];
+        double p2u = corrs_filtered[i].p2[0];
+        double p2v = corrs_filtered[i].p2[1];
+        denormalize(f1norm, f1width, f1height, p1u, p1v);
+        denormalize(f2norm, f2width, f2height, p2u, p2v);
+
+        // std::cout << "corr: (" << p1u << ", " << p1v << 
+        //     ") <-> (" << p2u << ", " << p2v << ")" << std::endl;
+        
+        core::image::draw_circle<uint8_t>(*reprojected_imgs[0], 
+            p1u, p1v, 3, color_rgb_red);
+        core::image::draw_circle<uint8_t>(*reprojected_imgs[1], 
+            p2u, p2v, 3, color_rgb_red);
+        // 每一個corr對應兩個二維點
+        p1u = rps[i*4];
+        p1v = rps[i*4+1];
+        p2u = rps[i*4+2];
+        p2v = rps[i*4+3];
+        denormalize(f1norm, f1width, f1height, p1u, p1v);
+        denormalize(f2norm, f2width, f2height, p2u, p2v);
+        core::image::draw_circle<uint8_t>(*reprojected_imgs[0], 
+            p1u, p1v, 2, color_rgb_blue);
+        core::image::draw_circle<uint8_t>(*reprojected_imgs[1], 
+            p2u, p2v, 2, color_rgb_blue);
+    }
+    core::image::save_file(reprojected_imgs[0], std::string("img1_reproject.jpg"));
+    core::image::save_file(reprojected_imgs[1], std::string("img2_reproject.jpg"));
 
 //    math::Matrix<double, 3, 4> P1, P2;
 //    new_cam_poses[0].fill_p_matrix(&P1);
