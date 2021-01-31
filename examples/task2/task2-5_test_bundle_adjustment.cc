@@ -9,6 +9,7 @@
 #include "core/image_io.h"
 #include "core/image.h"
 #include "core/image_tools.h"
+#include "core/image_drawing.h"
 
 #include "sfm/camera_pose.h"
 #include "sfm/fundamental.h"
