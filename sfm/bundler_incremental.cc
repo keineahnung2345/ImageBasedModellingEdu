@@ -45,6 +45,7 @@ Incremental::initialize (ViewportList* viewports, TrackList* tracks,
         throw std::invalid_argument("Two or more valid cameras required");
 
     /* Set track positions to invalid state. */
+    // 為何要讓track變成invalidated?
     for (std::size_t i = 0; i < tracks->size(); ++i)
     {
         Track& track = tracks->at(i);
@@ -58,6 +59,7 @@ void
 Incremental::find_next_views (std::vector<int>* next_views)
 {
     /* Create mapping from valid tracks to view ID. */
+    // valid track數量->view id
     std::vector<std::pair<int, int> > valid_tracks(this->viewports->size());
     for (std::size_t i = 0; i < valid_tracks.size(); ++i)
         valid_tracks[i] = std::make_pair(0, static_cast<int>(i));
@@ -71,8 +73,10 @@ Incremental::find_next_views (std::vector<int>* next_views)
         for (std::size_t j = 0; j < track.features.size(); ++j)
         {
             int const view_id = track.features[j].view_id;
+            // pose有效反而不計入?!
             if (this->viewports->at(view_id).pose.is_valid())
                 continue;
+            // first表示view_id所對應的valid track的個數
             valid_tracks[view_id].first += 1;
         }
     }
@@ -84,6 +88,7 @@ Incremental::find_next_views (std::vector<int>* next_views)
     next_views->clear();
     for (std::size_t i = 0; i < valid_tracks.size(); ++i)
     {
+        // 6這個數字怎麼來的?
         if (valid_tracks[i].first > 6)
             next_views->push_back(valid_tracks[i].second);
     }
@@ -91,6 +96,7 @@ Incremental::find_next_views (std::vector<int>* next_views)
 
 /* ---------------------------------------------------------------- */
 // 通过p3p重建新视角的相机姿态，并通过RANSAC去除错误的Tracks
+// P3P:由對應的三維和二維點,求解相機姿態
 bool
 Incremental::reconstruct_next_view (int view_id)
 {
@@ -101,11 +107,13 @@ Incremental::reconstruct_next_view (int view_id)
     Correspondences2D3D corr;
     std::vector<int> track_ids;
     std::vector<int> feature_ids;
+    // viewport.track_ids: index代表feature的id
     for (std::size_t i = 0; i < viewport.track_ids.size(); ++i)
     {
         int const track_id = viewport.track_ids[i];
         if (track_id < 0 || !this->tracks->at(track_id).is_valid())
             continue;
+        // i代表feature的id
         math::Vec2f const& pos2d = features.positions[i];
         math::Vec3f const& pos3d = this->tracks->at(track_id).pos;
 
@@ -178,6 +186,7 @@ Incremental::reconstruct_next_view (int view_id)
     /* Commit camera using known K and computed R and t. */
     {
         CameraPose& pose = this->viewports->at(view_id).pose;
+        // temp_camera的內參K已經設好了
         pose = temp_camera;
         pose.R = ransac_result.pose.delete_col(3);
         pose.t = ransac_result.pose.col(3);
@@ -198,6 +207,7 @@ Incremental::reconstruct_next_view (int view_id)
 
 /* ---------------------------------------------------------------- */
 
+// 跳過
 void
 Incremental::try_registration () {
     std::vector<math::Vec3d> p0;
@@ -278,6 +288,7 @@ Incremental::triangulate_new_tracks (int min_num_views)
     std::size_t initial_tracks_size = this->tracks->size();
     for (std::size_t i = 0; i < this->tracks->size(); ++i){
 
+        // 每個track代表一個三維點
         /* Skip tracks that have already been triangulated. */
         Track const& track = this->tracks->at(i);
         if (track.is_valid())
@@ -311,17 +322,20 @@ Incremental::triangulate_new_tracks (int min_num_views)
         // ransac 三角量测过程
         /* Accept track if triangulation was successful. */
         std::vector<std::size_t> outlier;
+        // 三角量測獲得的三維點座標
         math::Vec3d track_pos;
         if (!triangulator.triangulate(poses, pos, &track_pos, &stats, &outlier))
             continue;
         this->tracks->at(i).pos = track_pos;
 
         /* Check if track contains outliers */
+        // 沒有outlier反而跳過?
         if (outlier.size() == 0)
             continue;
 
         /* Split outliers from track and generate new track */
         Track & inlier_track = this->tracks->at(i);
+        // 新建的,由outlier組成的track
         Track outlier_track;
         outlier_track.invalidate();
         outlier_track.color = inlier_track.color;
@@ -334,6 +348,7 @@ Incremental::triangulate_new_tracks (int min_num_views)
             /* Add features to new track */
             outlier_track.features.emplace_back(view_id, feature_id);
             /* Change TrackID in viewports */
+            // 第view_id個view的第feature_id個feature現在屬於最後一個track
             this->viewports->at(view_id).track_ids[feature_id] =
                 this->tracks->size();
         }
@@ -391,9 +406,11 @@ Incremental::bundle_adjustment_intern (int single_camera_ba){
 
     /* Convert camera to BA data structures. */
     std::vector<ba::Camera> ba_cameras;
+    // 由this->viewports中的viewport對應到ba_cameras裡的相機
     std::vector<int> ba_cameras_mapping(this->viewports->size(), -1);
     for (std::size_t i = 0; i < this->viewports->size(); ++i)
     {
+        // single_camera_ba >= 0時表示要被優化的相機的id
         if (single_camera_ba >= 0 && int(i) != single_camera_ba)
             continue;
 
@@ -415,6 +432,7 @@ Incremental::bundle_adjustment_intern (int single_camera_ba){
     /* Convert tracks and observations to BA data structures. */
     std::vector<ba::Observation> ba_points_2d;
     std::vector<ba::Point3D> ba_points_3d;
+    // 由this->tracks中的track對應到ba_points_3d裡的三維點
     std::vector<int> ba_tracks_mapping(this->tracks->size(), -1);
     for (std::size_t i = 0; i < this->tracks->size(); ++i)
     {
@@ -441,6 +459,7 @@ Incremental::bundle_adjustment_intern (int single_camera_ba){
             Viewport const& view = this->viewports->at(view_id);
             math::Vec2f const& f2d = view.features.positions[feature_id];
 
+            // 圖像上的觀察點,是二維的
             ba::Observation point;
             std::copy(f2d.begin(), f2d.end(), point.pos);
             point.camera_id = ba_cameras_mapping[view_id];
@@ -456,6 +475,7 @@ Incremental::bundle_adjustment_intern (int single_camera_ba){
         /* Add corresponding 3D point to BA. */
         ba::Point3D point;
         std::copy(survey_point.pos.begin(), survey_point.pos.end(), point.pos);
+        // 代表不需要優化?
         point.is_constant = true;
         ba_points_3d.push_back(point);
 
@@ -489,11 +509,13 @@ Incremental::bundle_adjustment_intern (int single_camera_ba){
     std::size_t ba_cam_counter = 0;
     for (std::size_t i = 0; i < this->viewports->size(); ++i)
     {
+        // 如果相機是不合法的
         if (ba_cameras_mapping[i] == -1)
             continue;
 
         Viewport& view = this->viewports->at(i);
         CameraPose& pose = view.pose;
+        // 怎麼不用ba_cameras[ba_cameras_mapping[i]]?
         ba::Camera const& cam = ba_cameras[ba_cam_counter];
 
         if (this->opts.verbose_output && !this->opts.ba_fixed_intrinsics)
@@ -521,6 +543,7 @@ Incremental::bundle_adjustment_intern (int single_camera_ba){
         return;
 
     /* Transfer tracks back to SfM data structures. */
+    // 這裡怎麼不用ba_tracks_mapping?
     std::size_t ba_track_counter = 0;
     for (std::size_t i = 0; i < this->tracks->size(); ++i)
     {
@@ -553,6 +576,7 @@ Incremental::invalidate_large_error_tracks (void)
 
         double total_error = 0.0f;
         int num_valid = 0;
+        // 遍歷屬於這個track的所有特徵
         for (std::size_t j = 0; j < ref.size(); ++j){
 
             /* Get pose and 2D position of feature. */
@@ -567,9 +591,14 @@ Incremental::invalidate_large_error_tracks (void)
             math::Vec2f const& pos2d = viewport.features.positions[feature_id];
 
             /* Project 3D feature and compute reprojection error. */
+            // 由世界座標系到相機座標系
             math::Vec3d x = pose.R * pos3d + pose.t;
+            // 由相機座標系到歸一化像平面
             math::Vec2d x2d(x[0] / x[2], x[1] / x[2]);
+            // 在歸一化像平面上做徑向畸變
             double r2 = x2d.square_norm();
+            // 乘上pose.get_focal_length()表示由歸一化像平面到物理像平面
+            // 還缺一個由物理像平面到圖像上的過程(+(u0,v0))?
             x2d *= (1.0 + r2 * (viewport.radial_distortion[0] + viewport.radial_distortion[1] * r2)) * pose.get_focal_length();
             total_error += (pos2d - x2d).square_norm();
             num_valid += 1;
@@ -584,11 +613,13 @@ Incremental::invalidate_large_error_tracks (void)
     /* Find the 1/2 percentile. */
     std::size_t const nth_position = all_errors.size() / 2;
     std::nth_element(all_errors.begin(), all_errors.begin() + nth_position, all_errors.end());
+    // square_threshold怎麼是a*b,不是b*b?
     double const square_threshold = all_errors[nth_position].first * this->opts.track_error_threshold_factor;
 
     /* Delete all tracks with errors above the threshold. */
     int num_deleted_tracks = 0;
     for (std::size_t i = nth_position; i < all_errors.size(); ++i) {
+        // 這裡怎麼拿沒有平方的跟平方的做比較?!
         if (all_errors[i].first > square_threshold) {
             this->tracks->at(all_errors[i].second).invalidate();
             num_deleted_tracks += 1;

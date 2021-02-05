@@ -41,6 +41,7 @@ Matching::count_consistent_matches (Matching::Result const& matches)
 {
     int counter = 0;
     for (int i = 0; i < static_cast<int>(matches.matches_1_2.size()); ++i)
+        // 如果互相匹配
         if (matches.matches_1_2[i] != -1
             && matches.matches_2_1[matches.matches_1_2[i]] == i)
             counter++;

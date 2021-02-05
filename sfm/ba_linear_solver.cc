@@ -137,6 +137,7 @@ LinearSolver::solve (SparseMatrixType const& jac_cams,
         throw std::invalid_argument("No Jacobian given");
 }
 
+// 跳過
 LinearSolver::Status
 LinearSolver::solve_schur (SparseMatrixType const& jac_cams,
     SparseMatrixType const& jac_points,
@@ -260,6 +261,7 @@ LinearSolver::solve_schur (SparseMatrixType const& jac_cams,
     return status;
 }
 
+// 跳過
 LinearSolver::Status
 LinearSolver::solve (SparseMatrixType const& J,
     DenseVectorType const& vector_f,

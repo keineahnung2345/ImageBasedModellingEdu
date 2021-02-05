@@ -160,7 +160,7 @@ BundleAdjustment::lm_optimize (void)
             this->status.num_lm_iterations += 1;
             this->status.num_lm_successful_iterations += 1;
 
-            /* 对相机参数进行更新 */
+            /* 对相机及三維點参数进行更新 */
             this->update_parameters(delta_x);
 
             std::swap(F, F_new);
@@ -168,6 +168,8 @@ BundleAdjustment::lm_optimize (void)
 
             // todo trust region 是用来做什么的？
             /* Compute trust region update. FIXME delta_norm or mse? */
+            // F.size() / 2: 二維點的數量
+            // 這兩個的公式?
             double const gain_ratio = delta_mse * (F.size() / 2)
                 / cg_status.predicted_error_decrease;
             double const trust_region_update = 1.0 / std::max(1.0 / 3.0,
@@ -199,6 +201,7 @@ BundleAdjustment::lm_optimize (void)
             break;
         }
 
+        // 前面兩個if都跳過這一段,這一段是unreachable?
         /* Check threshold on the norm of delta_x. */
         if (successful_iteration)
         {
@@ -237,12 +240,14 @@ BundleAdjustment::compute_reprojection_errors (DenseVectorType* vector_f,
         Point3D new_point;
         Camera new_camera;
 
+        // delta_x是LM算法找出來的更新量
         // 如果delta_x 不为空，则先利用delta_x对相机和结构进行更新，然后再计算重投影误差
         if (delta_x != nullptr)
         {
             std::size_t cam_id = obs.camera_id * this->num_cam_params;
             std::size_t pt_id = obs.point_id * 3;
 
+            // 確認是要優化的相機?
             if (this->opts.bundle_mode & BA_CAMERAS)
             {
                 this->update_camera(cam, delta_x->data() + cam_id, &new_camera);
@@ -253,6 +258,7 @@ BundleAdjustment::compute_reprojection_errors (DenseVectorType* vector_f,
                 pt_id += this->cameras->size() * this->num_cam_params;
             }
 
+            // 確認是否需要優化三維點座標
             if (this->opts.bundle_mode & BA_POINTS)
             {
                 this->update_point(p3d, delta_x->data() + pt_id, &new_point);
@@ -261,6 +267,8 @@ BundleAdjustment::compute_reprojection_errors (DenseVectorType* vector_f,
         }
 
         /* Project point onto image plane. */
+        // *R + t: 轉到相機座標系
+        // /rp[2]: 轉到歸一化相平面
         double rp[] = { 0.0, 0.0, 0.0 };
         for (int d = 0; d < 3; ++d)
         {
@@ -273,9 +281,12 @@ BundleAdjustment::compute_reprojection_errors (DenseVectorType* vector_f,
         rp[1] = (rp[1] + trans[1]) / rp[2];
 
         /* Distort reprojections. */
+        // 做徑向畸變
         this->radial_distort(rp + 0, rp + 1, dist);
 
         /* Compute reprojection error. */
+        // * (*flen): 轉到物理像平面
+        // 不用平移: +(u0,v0)?
         vector_f->at(i * 2 + 0) = rp[0] * (*flen) - obs.pos[0];
         vector_f->at(i * 2 + 1) = rp[1] * (*flen) - obs.pos[1];
     }
@@ -323,6 +334,7 @@ void
 BundleAdjustment::analytic_jacobian (SparseMatrixType* jac_cam,
     SparseMatrixType* jac_points)
 {
+    // *2代表?
     // 相机和三维点jacobian矩阵的行数都是n_observations*2
     // 相机jacobian矩阵jac_cam的列数是n_cameras* n_cam_params
     // 三维点jacobian矩阵jac_points的列数是n_points*3
@@ -407,6 +419,7 @@ BundleAdjustment::analytic_jacobian (SparseMatrixType* jac_cam,
     }
 }
 
+// 跳過
 void
 BundleAdjustment::analytic_jacobian_entries (
         Camera const& cam,
@@ -699,6 +712,7 @@ BundleAdjustment::update_camera (Camera const& cam,
 {
     if (opts.fixed_intrinsics)
     {
+        // 不更新內參
         out->focal_length = cam.focal_length;
         out->distortion[0] = cam.distortion[0];
         out->distortion[1] = cam.distortion[1];
@@ -719,6 +733,7 @@ BundleAdjustment::update_camera (Camera const& cam,
     std::copy(cam.rotation, cam.rotation + 9, rot_orig);
     double rot_update[9];
     this->rodrigues_to_matrix(update + 3 + offset, rot_update);
+    // 由update[3+offset]得到的矩陣乘上rot_orig得到新的旋轉矩陣
     math::matrix_multiply(rot_update, 3, 3, rot_orig, 3, out->rotation);
 }
 

@@ -50,6 +50,7 @@ Matching::init (ViewportList* viewports)
         throw std::invalid_argument("Viewports must not be null");
 
     this->viewports = viewports;
+    // 其實就是把viewports裡的特徵copy到matcher的pfs.sift_descr
     this->matcher->init(viewports);
 
     /* Free descriptors. */
@@ -88,8 +89,11 @@ Matching::compute (PairwiseMatching* pairwise_matching)
                 << num_pairs << " (" << percent << "%)..." << std::flush;
         }
 
+        //?
         int const view_1_id = (int)(0.5 + std::sqrt(0.25 + 2.0 * i));
+        //?
         int const view_2_id = (int)i - view_1_id * (view_1_id - 1) / 2;
+        //匹配過(a,b)後略過(b,a)?
         if (this->opts.match_num_previous_frames != 0
             && view_2_id + this->opts.match_num_previous_frames < view_1_id)
             continue;
@@ -117,6 +121,7 @@ Matching::compute (PairwiseMatching* pairwise_matching)
         }
 
         /* Successful two view matching. Add the pair. */
+        // 記錄兩個view的id及圖中匹配點的id
         TwoViewMatching matching;
         matching.view_1_id = view_1_id;
         matching.view_2_id = view_2_id;
@@ -124,6 +129,7 @@ Matching::compute (PairwiseMatching* pairwise_matching)
 
 #pragma omp critical
         {
+            // pairwise_matching: 最終輸出的數據結構
             pairwise_matching->push_back(matching);
             std::cout << "\rPair (" << view_1_id << ","
                 << view_2_id << ") matched, " << matching.matches.size()
@@ -148,6 +154,7 @@ Matching::two_view_matching (int view_1_id, int view_2_id,
     {
         int const num_matches = this->matcher->pairwise_match_lowres(view_1_id,
             view_2_id, this->opts.num_lowres_features);
+        // 低解析度下匹配的對數要大於某一閾值才繼續匹配?
         if (num_matches < this->opts.min_lowres_matches)
         {
             message << "only " << num_matches
@@ -160,6 +167,7 @@ Matching::two_view_matching (int view_1_id, int view_2_id,
     /* Perform two-view descriptor matching. */
     sfm::Matching::Result matching_result;
     this->matcher->pairwise_match(view_1_id, view_2_id, &matching_result);
+    // 互相匹配的對數
     int num_matches = sfm::Matching::count_consistent_matches(matching_result);
 
     /* Require at least 8 matches. Check threshold. */
@@ -171,6 +179,7 @@ Matching::two_view_matching (int view_1_id, int view_2_id,
         return;
     }
 
+    // 由一匹配到二,不是互相匹配的
     /* Build correspondences from feature matching result. */
     sfm::Correspondences2D2D unfiltered_matches;
     sfm::CorrespondenceIndices unfiltered_indices;
@@ -182,6 +191,7 @@ Matching::two_view_matching (int view_1_id, int view_2_id,
                 continue;
 
             sfm::Correspondence2D2D match;
+            //由一匹配到二的點座標
             match.p1[0] = view_1.positions[i][0];
             match.p1[1] = view_1.positions[i][1];
             match.p2[0] = view_2.positions[m12[i]][0];
@@ -215,6 +225,7 @@ Matching::two_view_matching (int view_1_id, int view_2_id,
     for (int i = 0; i < num_inliers; ++i)
     {
         int const inlier_id = ransac_result.inliers[i];
+        // 記錄兩張圖中對應的點的索引
         matches->push_back(unfiltered_indices[inlier_id]);
     }
 }

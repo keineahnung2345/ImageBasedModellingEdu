@@ -28,6 +28,8 @@ SFM_BUNDLER_NAMESPACE_BEGIN
  * number of matches and chooses the first pair where the matches cannot
  * be explained with a homography.
  */
+// homography: 單應性
+// 初始的pair不應該符合單應的條件
 class InitialPair
 {
 public:
@@ -140,6 +142,7 @@ InitialPair::initialize (ViewportList const& viewports, TrackList const& tracks)
 inline bool
 InitialPair::CandidatePair::operator< (CandidatePair const& other) const
 {
+    // 用matches的大小做比較
     return this->matches.size() < other.matches.size();
 }
 

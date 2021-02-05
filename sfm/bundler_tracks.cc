@@ -25,6 +25,7 @@ unify_tracks(int view1_tid, int view2_tid,
     TrackList* tracks, ViewportList* viewports)
 {
     /* Unify in larger track. */
+    // 為何可以交換?
     if (tracks->at(view1_tid).features.size()
         < tracks->at(view2_tid).features.size())
         std::swap(view1_tid, view2_tid);
@@ -34,18 +35,25 @@ unify_tracks(int view1_tid, int view2_tid,
 
     for (std::size_t k = 0; k < track2.features.size(); ++k)
     {
+        // FeatureReferenceList: std::vector<FeatureReference>
+        // FeatureReference: 記錄view_id和feature_id
         int const view_id = track2.features[k].view_id;
         int const feat_id = track2.features[k].feature_id;
+        // 把第view_id個view的第feat_id的track_id改成view1_tid
         viewports->at(view_id).track_ids[feat_id] = view1_tid;
     }
+    // 把track2.features併入track1.features
     track1.features.insert(track1.features.end(),
         track2.features.begin(), track2.features.end());
     /* Free old track's memory. clear() does not work. */
+    // features: std::vector<FeatureReference>, FeatureReference: struct
     track2.features = FeatureReferenceList();
 }
 
 /* ---------------------------------------------------------------- */
 
+// 輸入: matchings, viewports
+// 輸出: viewports, tracks
 void
 Tracks::compute (PairwiseMatching const& matching,
     ViewportList* viewports, TrackList* tracks)
@@ -65,22 +73,28 @@ Tracks::compute (PairwiseMatching const& matching,
     tracks->clear();
     for (std::size_t i = 0; i < matching.size(); ++i)
     {
+        // 第i對用來做匹配的圖像
         TwoViewMatching const& tvm = matching[i];
         Viewport& viewport1 = viewports->at(tvm.view_1_id);
         Viewport& viewport2 = viewports->at(tvm.view_2_id);
 
         /* Iterate over matches for a pair. */
+        // 遍歷兩個view間的所有匹配對
         for (std::size_t j = 0; j < tvm.matches.size(); ++j)
         {
             CorrespondenceIndex idx = tvm.matches[j];
+            // viewport1的第idx.first個特徵點的track id
             int const view1_tid = viewport1.track_ids[idx.first];
             int const view2_tid = viewport2.track_ids[idx.second];
+            // 兩個特徵點的track id都是-1表示它們都還沒被記錄到tracks裡
             if (view1_tid == -1 && view2_tid == -1)
             {
                 /* No track ID associated with the match. Create track. */
+                // track id從0開始,所以新加進來的track是第tracks->size()個
                 viewport1.track_ids[idx.first] = tracks->size();
                 viewport2.track_ids[idx.second] = tracks->size();
                 tracks->push_back(Track());
+                // 記錄屬於這個track的這兩個特徵的view_id及feature_id
                 tracks->back().features.push_back(
                     FeatureReference(tvm.view_1_id, idx.first));
                 tracks->back().features.push_back(
@@ -89,6 +103,10 @@ Tracks::compute (PairwiseMatching const& matching,
             else if (view1_tid == -1 && view2_tid != -1)
             {
                 /* Propagate track ID from first to second view. */
+                /*
+                view2裡的feature已經屬於某個track了,
+                這裡再把view1裡的feature加進來
+                */
                 viewport1.track_ids[idx.first] = view2_tid;
                 tracks->at(view2_tid).features.push_back(
                     FeatureReference(tvm.view_1_id, idx.first));
@@ -136,8 +154,10 @@ Tracks::compute (PairwiseMatching const& matching,
             FeatureReference const& ref = track.features[j];
             FeatureSet const& features = viewports->at(ref.view_id).features;
             math::Vec3f const feature_color(features.colors[ref.feature_id]);
+            // 利用Vec4f的最後一個元素當counter
             color += math::Vec4f(feature_color, 1.0f);
         }
+        // /color[3]:做平均, +0.5: 四捨五入
         track.color[0] = static_cast<uint8_t>(color[0] / color[3] + 0.5f);
         track.color[1] = static_cast<uint8_t>(color[1] / color[3] + 0.5f);
         track.color[2] = static_cast<uint8_t>(color[2] / color[3] + 0.5f);
@@ -167,6 +187,7 @@ Tracks::remove_invalid_tracks (ViewportList* viewports, TrackList* tracks)
         for (std::size_t j = 0; j < tracks->at(i).features.size(); ++j)
         {
             FeatureReference const& ref = tracks->at(i).features[j];
+            // 這個view_id已經在tracks->at(i)裡出現過了
             if (view_ids.insert(ref.view_id).second == false) {
                 num_invalid_tracks += 1;
                 delete_tracks[i] = true;
@@ -176,6 +197,7 @@ Tracks::remove_invalid_tracks (ViewportList* viewports, TrackList* tracks)
     }
 
     /* Create a mapping from old to new track IDs. */
+    // 例:把[0,1,d,3,d,5]對應到[0,1,2,3]
     std::vector<int> id_mapping(delete_tracks.size(), -1);
     int valid_track_counter = 0;
     for (std::size_t i = 0; i < delete_tracks.size(); ++i)

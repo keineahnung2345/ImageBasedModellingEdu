@@ -19,6 +19,7 @@
 SFM_NAMESPACE_BEGIN
 SFM_BUNDLER_NAMESPACE_BEGIN
 
+// 尋找適合的一對圖片並計算相機姿態
 void
 InitialPair::compute_pair (Result* result)
 {
@@ -34,6 +35,7 @@ InitialPair::compute_pair (Result* result)
     std::vector<CandidatePair> candidates;
     this->compute_candidate_pairs(&candidates);
     /* Sort the candidate pairs by number of matches. */
+    // CandidatePair的"operator<"方法已被重寫,依matches的數量做排序
     std::sort(candidates.rbegin(), candidates.rend());
 
     /*
@@ -61,7 +63,7 @@ InitialPair::compute_pair (Result* result)
             continue;
         }
 
-        //标准2： 单应矩阵矩阵的内点比例数过高
+        //标准2： 拒絕单应矩阵矩阵的内点比例数过高者
         /* Reject pairs with too high percentage of homograhy inliers. */
         std::size_t num_inliers = this->compute_homography_inliers(candidate);
         float percentage = static_cast<float>(num_inliers) / num_matches;
@@ -96,6 +98,7 @@ InitialPair::compute_pair (Result* result)
         std::size_t successful_triangulations = 0;
         std::vector<math::Vec2f> positions(2);
         Triangulate::Statistics stats;
+        // 對兩個視角裡的所有匹配點進行三角化
         for (std::size_t j = 0; j < candidate.matches.size(); ++j) {
             positions[0] = math::Vec2f(candidate.matches[j].p1);
             positions[1] = math::Vec2f(candidate.matches[j].p2);
@@ -107,6 +110,7 @@ InitialPair::compute_pair (Result* result)
             continue;
 
 #pragma omp critical
+        // 將found_pair_id設成最小的i?
         if (i < found_pair_id)
         {
             result->view_1_id = candidate.view_1_id;
@@ -184,11 +188,14 @@ InitialPair::compute_candidate_pairs (CandidatePairs* candidates)
      * further filtered during track generation.
      */
     int const num_viewports = static_cast<int>(this->viewports->size());
+    // 由(view_id 1, view_id 2)查pair_id
     std::vector<int> candidate_lookup(MATH_POW2(num_viewports), -1);
+    // 保留容量,但是不改變size
     candidates->reserve(1000);
     for (std::size_t i = 0; i < this->tracks->size(); ++i)
     {
         Track const& track = this->tracks->at(i);
+        // 從track.features選(k,j)組成一對
         for (std::size_t j = 1; j < track.features.size(); ++j)
             for (std::size_t k = 0; k < j; ++k) {
 
@@ -221,6 +228,7 @@ InitialPair::compute_candidate_pairs (CandidatePairs* candidates)
                 Correspondence2D2D match;
                 std::copy(v1pos.begin(), v1pos.end(), match.p1);
                 std::copy(v2pos.begin(), v2pos.end(), match.p2);
+                // candidates[pair_id].matches: 第pair_id對圖像中相對應的二維點座標
                 candidates->at(pair_id).matches.push_back(match);
             }
     }
@@ -251,16 +259,20 @@ InitialPair::compute_pose (CandidatePair const& candidate,
         }
         fundamental_least_squares(matches, &fundamental);
         enforce_fundamental_constraints(&fundamental);
+        // 好像沒有限制基礎矩陣的norm?
     }
 
     /* Populate K-matrices. */
     Viewport const& view_1 = this->viewports->at(candidate.view_1_id);
     Viewport const& view_2 = this->viewports->at(candidate.view_2_id);
     pose1->set_k_matrix(view_1.focal_length, 0.0, 0.0);
+    // 假設相機1與世界座標系重合
     pose1->init_canonical_form();
     pose2->set_k_matrix(view_2.focal_length, 0.0, 0.0);
 
     /* Compute essential matrix from fundamental matrix (HZ (9.12)). */
+    // F = K2^(-T) * E * K1^(-1)
+    // E = K2^T * F * K1
     EssentialMatrix E = pose2->K.transposed() * fundamental * pose1->K;
 
     /* Compute pose from essential. */
@@ -271,6 +283,7 @@ InitialPair::compute_pose (CandidatePair const& candidate,
     bool found_pose = false;
     for (std::size_t i = 0; i < poses.size(); ++i)
     {
+        // 內參沿用原來的,這裡只需要決定外參
         poses[i].K = pose2->K;
         if (is_consistent_pose(candidate.matches[0], *pose1, poses[i]))
         {
@@ -287,23 +300,29 @@ InitialPair::angle_for_pose (CandidatePair const& candidate,
     CameraPose const& pose1, CameraPose const& pose2)
 {
     /* Compute transformation from image coordinates to viewing direction. */
+    // 由圖像座標系到三維的世界座標系(還差平移向量t及深度zc)?
+    // 此處忽略t及zc是因為平移及縮放不影響向量的方向?
     math::Matrix3d T1 = pose1.R.transposed() * math::matrix_inverse(pose1.K);
     math::Matrix3d T2 = pose2.R.transposed() * math::matrix_inverse(pose2.K);
 
     /* Compute triangulation angle for each correspondence. */
     std::vector<double> cos_angles;
     cos_angles.reserve(candidate.matches.size());
+    // 把各匹配點間的夾角記錄到cos_angles裡
     for (std::size_t i = 0; i < candidate.matches.size(); ++i)
     {
         Correspondence2D2D const& match = candidate.matches[i];
+        // 二維點的齊次座標
         math::Vec3d p1(match.p1[0], match.p1[1], 1.0);
         p1 = T1.mult(p1).normalized();
         math::Vec3d p2(match.p2[0], match.p2[1], 1.0);
         p2 = T2.mult(p2).normalized();
+        // 內積為||a||*||b||*cos(theta),此處||a||, ||b||皆為1
         cos_angles.push_back(p1.dot(p2));
     }
 
     /* Return 50% median. */
+    // cos_angles包含了兩張視角的多個匹配點,這裡選取它們的中位數
     std::size_t median_index = cos_angles.size() / 2;
     std::nth_element(cos_angles.begin(),
         cos_angles.begin() + median_index, cos_angles.end());
@@ -315,15 +334,20 @@ float
 InitialPair::score_for_pair (CandidatePair const& candidate,
     std::size_t num_inliers, double angle)
 {
+    // 分數計算方式?
+    // matches, angle_d越大越好,inliers(單應矩陣)越小越好
     float const matches = static_cast<float>(candidate.matches.size());
     float const inliers = static_cast<float>(num_inliers) / matches;
     float const angle_d = MATH_RAD2DEG(angle);
 
     /* Score for matches (min: 20, good: 200). */
+    // (2 / (1 + exp(20-matches)*6/200)) - 1
     float f1 = 2.0 / (1.0 + std::exp((20.0 - matches) * 6.0 / 200.0)) - 1.0;
     /* Score for angle (min 1 degree, good 8 degree). */
+    // (2 / (1 + exp(1-angle_d)*6/8)) - 1
     float f2 = 2.0 / (1.0 + std::exp((1.0 - angle_d) * 6.0 / 8.0)) - 1.0;
     /* Score for H-Inliers (max 70%, good 40%). */
+    // (2 / (1 + exp(inliers-0.7)*6/0.4)) - 1
     float f3 = 2.0 / (1.0 + std::exp((inliers - 0.7) * 6.0 / 0.4)) - 1.0;
 
     f1 = math::clamp(f1, 0.0f, 1.0f);

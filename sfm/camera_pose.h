@@ -52,6 +52,7 @@ public:
     bool is_valid (void) const;
 
 public:
+    // 內參K及外參R,t
     math::Matrix<double, 3, 3> K;
     math::Matrix<double, 3, 3> R;
     math::Vector<double, 3> t;
@@ -77,6 +78,7 @@ CameraPose::init_canonical_form (void)
 inline void
 CameraPose::fill_p_matrix (math::Matrix<double, 3, 4>* P) const
 {
+    // P矩陣: K[R|t]
     math::Matrix<double, 3, 3> KR = this->K * this->R;
     math::Matrix<double, 3, 1> Kt(*(this->K * this->t));
     *P = KR.hstack(Kt);

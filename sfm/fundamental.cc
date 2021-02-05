@@ -52,14 +52,23 @@ fundamental_least_squares (Correspondences2D2D const& points,
     for (std::size_t i = 0; i < points.size(); ++i)
     {
         Correspondence2D2D const& p = points[i];
+        // u1*u2
         A[i * 9 + 0] = p.p2[0] * p.p1[0];
+        // u2*v1
         A[i * 9 + 1] = p.p2[0] * p.p1[1];
+        // u2
         A[i * 9 + 2] = p.p2[0] * 1.0;
+        // v2 * u1
         A[i * 9 + 3] = p.p2[1] * p.p1[0];
+        // v2 * v1
         A[i * 9 + 4] = p.p2[1] * p.p1[1];
+        // v2
         A[i * 9 + 5] = p.p2[1] * 1.0;
+        // u1
         A[i * 9 + 6] = 1.0     * p.p1[0];
+        // v1
         A[i * 9 + 7] = 1.0     * p.p1[1];
+        // 1
         A[i * 9 + 8] = 1.0     * 1.0;
     }
 
@@ -148,6 +157,7 @@ void
  pose_from_essential (EssentialMatrix const& matrix,
     std::vector<CameraPose>* result)
 {
+    // 由本質矩陣恢復相機2的外參
     /*
      * The pose [R|t] for the second camera is extracted from the essential
      * matrix E and the first camera is given in canonical form [I|0].
@@ -166,6 +176,7 @@ void
 
     // This seems to ensure that det(R) = 1 (instead of -1).
     // FIXME: Is this the correct way to do it?
+    // 看不懂
     if (math::matrix_determinant(U) < 0.0)
         for (int i = 0; i < 3; ++i)
             U(i,2) = -U(i,2);
@@ -173,6 +184,7 @@ void
         for (int i = 0; i < 3; ++i)
             V(i,2) = -V(i,2);
 
+    // 看不懂
     V.transpose();
     result->clear();
     result->resize(4);

@@ -132,6 +132,7 @@ features_and_matching (core::Scene::Ptr scene,
     //matching_opts.ransac_opts.max_iterations = 1000;
     //matching_opts.ransac_opts.threshold = 0.0015;
     matching_opts.ransac_opts.verbose_output = false;
+    // 為何不用?
     matching_opts.use_lowres_matching = false;
     matching_opts.match_num_previous_frames = false;
     matching_opts.matcher_type = sfm::bundler::Matching::MATCHER_EXHAUSTIVE;
@@ -208,6 +209,7 @@ int main(int argc, char *argv[])
     }
 
     /* Remove color data and pairwise matching to save memory. */
+    // 因為已經計算好每個track的color了
     for (std::size_t i = 0; i < viewports.size(); ++i)
         viewports[i].features.colors.clear();
     pairwise_matching.clear();
@@ -271,6 +273,7 @@ int main(int argc, char *argv[])
     std::cout << "Running full bundle adjustment..." << std::endl;
     incremental.bundle_adjustment_full();
 
+    // 把新的視角加進來
     /* Reconstruct remaining views. */
     int num_cameras_reconstructed = 2;
     int full_ba_num_skipped = 0;
@@ -297,11 +300,13 @@ int main(int argc, char *argv[])
 
         if (next_view_id < 0) {
             if (full_ba_num_skipped == 0) {
+                // 如果全局捆綁調整的跳過次數為0,則不需要做全局捆綁調整
                 std::cout << "No valid next view." << std::endl;
                 std::cout << "SfM reconstruction finished." << std::endl;
                 break;
             }
             else{
+                // 如果全局捆綁調整的跳過次數不為0,則做過全局捆綁調整後繼續下一次迭代
                 incremental.triangulate_new_tracks(MIN_VIEWS_PER_TRACK);
                 std::cout << "Running full bundle adjustment..." << std::endl;
                 incremental.invalidate_large_error_tracks();

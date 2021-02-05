@@ -32,6 +32,7 @@ extract_focal_length (core::image::ExifInfo const& exif)
     }
     if (focal_length > 0.0f && sensor_size > 0.0f)
     {
+        //?
         float flen = focal_length / sensor_size;
         return std::make_pair(flen, FOCAL_LENGTH_AND_DATABASE);
     }
@@ -40,6 +41,7 @@ extract_focal_length (core::image::ExifInfo const& exif)
     float focal_length_35mm = exif.focal_length_35mm;
     if (focal_length_35mm > 0.0f)
     {
+        // sensor_size默認是35mm?
         float flen = focal_length_35mm / 35.0f;
         return std::make_pair(flen, FOCAL_LENGTH_35MM_EQUIV);
     }

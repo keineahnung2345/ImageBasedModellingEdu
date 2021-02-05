@@ -17,6 +17,7 @@
 
 SFM_NAMESPACE_BEGIN
 
+// 直接線性變換法求解單應矩陣
 bool
 homography_dlt (Correspondences2D2D const& points, HomographyMatrix* result)
 {
@@ -24,6 +25,7 @@ homography_dlt (Correspondences2D2D const& points, HomographyMatrix* result)
         throw std::invalid_argument("At least 4 matches required");
 
     /* Create 2Nx9 matrix A. Each correspondence creates two rows in A. */
+    // 2N: 方程式數量,9:未知數數量
     std::vector<double> A(2 * points.size() * 9);
     for (std::size_t i = 0; i < points.size(); ++i)
     {
@@ -33,20 +35,31 @@ homography_dlt (Correspondences2D2D const& points, HomographyMatrix* result)
         A[row1 + 0] =  0.0;
         A[row1 + 1] =  0.0;
         A[row1 + 2] =  0.0;
+        // u1
         A[row1 + 3] =  match.p1[0];
+        // v1
         A[row1 + 4] =  match.p1[1];
         A[row1 + 5] =  1.0;
+        // -u1 * v2
         A[row1 + 6] = -match.p1[0] * match.p2[1];
+        // -v1 * v2
         A[row1 + 7] = -match.p1[1] * match.p2[1];
+        // -v2
         A[row1 + 8] = -match.p2[1];
+        // -u1
         A[row2 + 0] = -match.p1[0];
+        // -v1
         A[row2 + 1] = -match.p1[1];
+        // -1
         A[row2 + 2] = -1.0;
         A[row2 + 3] =  0.0;
         A[row2 + 4] =  0.0;
         A[row2 + 5] =  0.0;
+        // u1 * u2
         A[row2 + 6] =  match.p1[0] * match.p2[0];
+        // v1 * u2
         A[row2 + 7] =  match.p1[1] * match.p2[0];
+        // u2
         A[row2 + 8] =  match.p2[0];
     }
 
@@ -72,18 +85,22 @@ symmetric_transfer_error(HomographyMatrix const& homography,
      *
      *   e = d(x, (H^-1)x')^2 + d(x', Hx)^2
      */
+    // 錯誤計算方式?得看論文
     math::Vec3d p1(match.p1[0], match.p1[1], 1.0);
     math::Vec3d p2(match.p2[0], match.p2[1], 1.0);
 
     math::Matrix3d invH = math::matrix_inverse(homography);
     math::Vec3d result = invH * p2;
+    // result的第三個元素是dummy的,要保持為1
     result /= result[2];
     double error = (p1 - result).square_norm();
 
     result = homography * p1;
+    // result的第三個元素是dummy的,要保持為1
     result /= result[2];
     error += (result - p2).square_norm();
 
+    // 比註解的公式多乘了0.5?
     return 0.5 * error;
 }
 

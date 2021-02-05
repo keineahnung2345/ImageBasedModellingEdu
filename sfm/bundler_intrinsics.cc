@@ -59,6 +59,7 @@ Intrinsics::init_from_exif (core::View::Ptr view, Viewport* viewport)
     {
         std::cout << "Warning: No EXIF information for view "
             << view->get_id() << ", using fallback!" << std::endl;
+        // 設定viewport->focal_length
         this->fallback_focal_length(viewport);
         return;
     }
@@ -84,6 +85,7 @@ Intrinsics::init_from_exif (core::View::Ptr view, Viewport* viewport)
     catch (std::exception& e)
     {
         std::cout << "Warning: " << e.what() << std::endl;
+        // 採用預設值
         estimate = sfm::extract_focal_length(core::image::ExifInfo());
     }
 

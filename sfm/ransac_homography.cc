@@ -51,6 +51,7 @@ RansacHomography::estimate (Correspondences2D2D const& matches, Result* result)
                     << "%)" << std::endl;
             }
 
+            //迭代this->opts.max_iterations次,找到當inlier最多的單應矩陣
             result->homography = homography;
             std::swap(result->inliers, inliers);
             inliers.reserve(matches.size());
@@ -79,6 +80,7 @@ RansacHomography::compute_homography (Correspondences2D2D const& matches,
         four_correspondeces[i] = matches[*iter];
 
     sfm::homography_dlt(four_correspondeces, homography);
+    // 單應矩陣實際上只有8個自由度,對H33做歸一化
     *homography /= (*homography)[8];
 }
 

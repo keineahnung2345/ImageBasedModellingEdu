@@ -34,6 +34,7 @@ SFM_BUNDLER_NAMESPACE_BEGIN
 void
 Track::invalidate (void)
 {
+    //?
     std::fill(this->pos.begin(), this->pos.end(),
         std::numeric_limits<float>::quiet_NaN());
 }
@@ -45,6 +46,7 @@ Track::remove_view (int view_id)
         iter != this->features.end();)
     {
         if (iter->view_id == view_id)
+            // 這個寫法可以學
             iter = this->features.erase(iter);
         else
             iter++;

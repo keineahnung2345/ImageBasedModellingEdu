@@ -23,6 +23,7 @@ RansacPoseP3P::RansacPoseP3P (Options const& options)
 {
 }
 
+// 跳過
 void
 RansacPoseP3P::estimate (Correspondences2D3D const& corresp,
     math::Matrix<double, 3, 3> const& k_matrix, Result* result) const{

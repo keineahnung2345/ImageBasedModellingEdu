@@ -128,6 +128,7 @@ SparseMatrix<T>::reserve (std::size_t num_elements)
     this->values.reserve(num_elements);
 }
 
+// 跳過
 template <typename T>
 void
 SparseMatrix<T>::set_from_triplets (Triplets const& triplets)
