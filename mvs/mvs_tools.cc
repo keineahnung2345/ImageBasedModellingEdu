@@ -105,18 +105,22 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
 
         int const left = std::floor(imgPos[i][0]);
         int const top = std::floor(imgPos[i][1]);
+        // 點位置到像素左邊界的距離
         float const x = imgPos[i][0] - left;
+        // 點位置到像素上界的距離
         float const y = imgPos[i][1] - top;
 
         if (left < 0 || left > width-1 || top < 0 || top > height-1)
             throw std::runtime_error("Image position out of bounds");
 
         /* data position pointer */
+        // *3: rgb
         int p0 = (top * width + left) * 3;
         int p1 = ((top+1) * width + left) * 3;
 
         /* bilinear interpolation to determine color value */
         float x0, x1, x2, x3, x4, x5;
+        // 權重與距離成反比,所以是:"到右邊界的距離*左邊的顏色值+到左邊界的距離*右邊的顏色值"
         x0 = (1.f-x) * srgb2lin[img.at(p0  )] + x * srgb2lin[img.at(p0+3)];
         x1 = (1.f-x) * srgb2lin[img.at(p0+1)] + x * srgb2lin[img.at(p0+4)];
         x2 = (1.f-x) * srgb2lin[img.at(p0+2)] + x * srgb2lin[img.at(p0+5)];
@@ -124,6 +128,7 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
         x4 = (1.f-x) * srgb2lin[img.at(p1+1)] + x * srgb2lin[img.at(p1+4)];
         x5 = (1.f-x) * srgb2lin[img.at(p1+2)] + x * srgb2lin[img.at(p1+5)];
 
+        // 權重與距離成反比,所以是:"到下界的距離*上面的顏色值+到上界的距離*下面的顏色值"
         color[i][0] = (1.f - y) * x0 + y * x3;
         color[i][1] = (1.f - y) * x1 + y * x4;
         color[i][2] = (1.f - y) * x2 + y * x5;
@@ -134,12 +139,20 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
         float v = gradDir[i][1];
         for (int c = 0; c < 3; ++c)
         {
+            /* [-2 0]
+               [1  0]
+            */
+            /*
+                [1  -1]
+                [-1  1]
+            */
             deriv[i][c] =
                 u * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)])
                 + v * (srgb2lin[img.at(p1)] - srgb2lin[img.at(p0)])
                 + (v * x + u * y) *
                     (srgb2lin[img.at(p0)] - srgb2lin[img.at(p0+3)]
                      - srgb2lin[img.at(p1)] + srgb2lin[img.at(p1+3)]);
+            // 下一個顏色
             ++p0;
             ++p1;
         }

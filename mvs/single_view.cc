@@ -112,19 +112,25 @@ SingleView::viewRayScaled(int x, int y) const
 {
     assert(this->has_target_level);
 
+    // 相機座標系中的三維點,norm為1
     math::Vec3f ray = core::geom::pixel_3dpos(x, y, 1.f, this->target_level.invproj);
+    // 相機的外參R
     math::Matrix3f rot(view->get_camera().rot);
+    // R的逆矩陣:將三維點由相機座標系轉到世界座標系
     return rot.transposed() * ray;
 }
 
 bool
 SingleView::pointInFrustum(math::Vec3f const& wp) const
 {
+    // 世界座標系到相機座標系
     math::Vec3f cp = this->worldToCam.mult(wp, 1.0f);
     // check whether point lies in front of camera
     if (cp[2] <= 0.0f)
         return false;
+    // 相機座標系到歸一化像平面?
     math::Vec3f sp = this->source_level.proj * cp;
+    // 歸一化像平面到圖像?
     float x = sp[0] / sp[2] - 0.5f;
     float y = sp[1] / sp[2] - 0.5f;
     return x >= 0 && x <= this->source_level.width - 1

@@ -60,6 +60,9 @@ PatchOptimization::PatchOptimization(
     pixel_weight.resize(sampler->getNrSamples());
 
     // 像素权重初始化，初始时每个值设定为1
+    // jj: (-halfFW)*FW, (-halfFW+1)*FW, ..., (halfFW)*FW
+    // ii: (-halfFW, -halfFW+1, ..., halfFW)*FW
+    // ii跟jj沒搞反?
     for (int j = -halfFW; j <= halfFW; ++j)
         for (int i = -halfFW; i <= halfFW; ++i) {
             ii[count] = i;
@@ -333,6 +336,7 @@ void PatchOptimization::optimizeDepthAndNormal(){
         return;
     }
     IndexSet const & neighIDs = localVS.getSelectedIDs();
+    // nrSamples為5*5=25
     std::size_t nrSamples = sampler->getNrSamples();
 
     // Solve linear system A*x = b using Moore-Penrose pseudoinverse
@@ -344,15 +348,18 @@ void PatchOptimization::optimizeDepthAndNormal(){
     std::size_t row = 0;
     for (id = neighIDs.begin(); id != neighIDs.end(); ++id){
         Samples nCol, nDeriv;
+        // nDeriv[i][c]: patch上第i個像素對第c個顏色的導數
         sampler->fastColAndDeriv(*id, nCol, nDeriv);
         if (!sampler->success[*id]) {
             status.optiSuccess = false;
             return;
         }
         math::Vec3f cs(colorScale[*id]);
+        // nrSamples: 為5*5=25,相當於把5*5的patch展開成一個向量
         for (std::size_t i = 0; i < nrSamples; ++i) {
             for (int c = 0; c < 3; ++c) {
                 math::Vec3f a_i;
+                // cs[c] * nDeriv[i][c] * [1 i j]
                 a_i[0] = pixel_weight[i] *         cs[c] * nDeriv[i][c];
                 a_i[1] = pixel_weight[i] * ii[i] * cs[c] * nDeriv[i][c];
                 a_i[2] = pixel_weight[i] * jj[i] * cs[c] * nDeriv[i][c];
@@ -372,6 +379,7 @@ void PatchOptimization::optimizeDepthAndNormal(){
             }
         }
     }
+    // ATA是對稱矩陣
     ATA(1,0) = ATA(0,1); ATA(2,0) = ATA(0,2); ATA(2,1) = ATA(1,2);
     double detATA = math::matrix_determinant(ATA);
     if (detATA == 0.f) {

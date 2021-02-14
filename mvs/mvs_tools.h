@@ -47,7 +47,9 @@ parallax(math::Vec3f p, mvs::SingleView::Ptr v1, mvs::SingleView::Ptr v2)
 {
     math::Vec3f dir1 = (p - v1->camPos).normalized();
     math::Vec3f dir2 = (p - v2->camPos).normalized();
+    // 兩個視角射線夾角的cos值
     float dp = std::max(std::min(dir1.dot(dir2), 1.f), -1.f);
+    // 取acos再轉換成度
     float plx = std::acos(dp) * 180.f / pi;
     return plx;
 }

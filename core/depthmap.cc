@@ -150,8 +150,12 @@ math::Vec3f
 pixel_3dpos (std::size_t x, std::size_t y, float depth,
     math::Matrix3f const& invproj)
 {
+    // x,y座標+0.5表示像素正中心?
+    // (x,y,1.0f)為齊次座標
+    // invproj: 相機內參K的逆矩陣,將圖像座標系變換到相機座標系
     math::Vec3f ray = invproj * math::Vec3f
         ((float)x + 0.5f, (float)y + 0.5f, 1.0f);
+    // depth是點到相機光心的距離?
     return ray.normalized() * depth;
 }
 

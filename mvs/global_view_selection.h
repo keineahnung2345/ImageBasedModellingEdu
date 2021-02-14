@@ -22,7 +22,7 @@ MVS_NAMESPACE_BEGIN
 
 /**
  * 全局视角选择为每个一帧参考图像R选取N=10幅相邻帧作为候选用于立体匹配
- * 全局视角的选择会考虑到图像内容，图像尺度，同时也需要保证相邻视角和参考R之间的石碴足够大
+ * 全局视角的选择会考虑到图像内容，图像尺度，同时也需要保证相邻视角和参考R之间的視差足够大
  */
 class GlobalViewSelection : public ViewSelection{
 public:

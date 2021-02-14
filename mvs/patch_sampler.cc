@@ -38,6 +38,7 @@ PatchSampler::PatchSampler(std::vector<SingleView::Ptr> const& _views,
     offset = settings.filterWidth / 2;
 
     // 需要采样的点的个数是5x5
+    // filterWidth預設是5,所以nrSamples是5*5=25
     nrSamples = sqr(settings.filterWidth);
 
     /* initialize arrays */
@@ -103,6 +104,7 @@ void PatchSampler::fastColAndDeriv(std::size_t v, Samples& color, Samples& deriv
         return;
 
     // 邻域视角的分辨率比参考视角高2倍以上
+    // 降低鄰域視角的分辨率?
     float ratio = nfp / mfp;
     int mmLevel = 0;
     while (ratio < 0.5f) {
@@ -112,11 +114,16 @@ void PatchSampler::fastColAndDeriv(std::size_t v, Samples& color, Samples& deriv
     mmLevel = views[v]->clampLevel(mmLevel);
 
     /* compute step size for derivative */
+    // masterViewDirs: 視線,norm為1
+    // p1: p0(patch中心)往視線方向移動1個單位
     math::Vec3f p1(p0 + masterViewDirs[nrSamples/2]);
+    // patchPoints[12]就是p0?
+    // 將"p0往視線方向移動1個單位"和"p0"投影到圖像上,然後計算它們的距離,這是在算誤差?
     float d = (views[v]->worldToScreen(p1, mmLevel) - views[v]->worldToScreen(patchPoints[12], mmLevel)).norm();
     if (!(d > 0.f)) {
         return;
     }
+    // ?
     stepSize[v] = 1.f / d;
 
     /* request according undistorted color image */
@@ -129,6 +136,7 @@ void PatchSampler::fastColAndDeriv(std::size_t v, Samples& color, Samples& deriv
     std::vector<math::Vec2f> gradDir(nrSamples);
     for (std::size_t i = 0; i < nrSamples; ++i){
         math::Vec3f p0(patchPoints[i]);
+        // 因為有*stepSize(即/d),所以p0到p1的距離是1?
         math::Vec3f p1(patchPoints[i] + masterViewDirs[i] * stepSize[v]);
         imgPos[i] = views[v]->worldToScreen(p0, mmLevel);
         // imgPos should be away from image border
@@ -136,6 +144,9 @@ void PatchSampler::fastColAndDeriv(std::size_t v, Samples& color, Samples& deriv
                 imgPos[i][1] > 0 && imgPos[i][1] < h-1)) {
             return;
         }
+        // views[v]->worldToScreen(p1, mmLevel):向視線方向移動1單位再投影到圖像上
+        // gradDir為p1重投影點與p0重投影點的差
+        // gradDir[i]的norm是1?
         gradDir[i] = views[v]->worldToScreen(p1, mmLevel) - imgPos[i];
     }
 
@@ -174,6 +185,7 @@ float PatchSampler::getFastNCC(std::size_t v){
     meanY /= (float) nrSamples;
 
     /**计算NCC的颜色值**/
+    // 標準差的平方
     float sqrDevY = 0.f;
     float devXY = 0.f;
     for (std::size_t i = 0; i < nrSamples; ++i){

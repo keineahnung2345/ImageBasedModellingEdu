@@ -33,7 +33,7 @@ struct Settings
     /**NCC的阈值，低于此值则说明匹配是无效的**/
     float minNCC = 0.3f;
 
-    /**计算特征点在不同视角中的射线构成的夹脚**/
+    /**计算特征点在不同视角中的射线构成的夹角**/
     float minParallax = 10.0f;
 
     /**可以接受的NCC的值**/
@@ -58,6 +58,7 @@ struct Settings
     bool writePlyFile = false;
 
     /** Features outside the AABB are ignored. */
+    // 三維空間中的axis-aligned bounding box
     math::Vec3f aabbMin = math::Vec3f(-std::numeric_limits<float>::max());
     math::Vec3f aabbMax = math::Vec3f(std::numeric_limits<float>::max());
 

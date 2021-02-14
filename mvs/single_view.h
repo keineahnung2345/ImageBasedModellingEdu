@@ -89,7 +89,7 @@ private:
     // 原始尺寸的图像尺度（不包含图像数据，仅包含相机内参数和图像尺寸）
     ImagePyramidLevel source_level;
 
-    // 需要进行稠密重建的图像尺度（不包含图像数据，尽包含相机内参数和图像尺寸）
+    // 需要进行稠密重建的图像尺度（不包含图像数据，仅包含相机内参数和图像尺寸）
     ImagePyramidLevel target_level;
 
     // 要重建的尺度
@@ -114,6 +114,7 @@ SingleView::getFeatureIndices() const{
     return featInd;
 }
 
+// 確保level落在[minLevel, maxLevel]之間
 inline int
 SingleView::clampLevel(int level) const{
     if (level < minLevel)
@@ -154,12 +155,24 @@ SingleView::createFileName(float scale) const
     return fileName;
 }
 
+// 看不懂?
+// 回傳resolution?
 inline float
 SingleView::footPrint(math::Vec3f const& point)
 {
+    // this->worldToCam.mult(point, 1)[2]: 將point轉到相機座標系後看z座標
+    // invproj[0]: 矩陣的第0個元素,是焦距的倒數?
+    // 相機內參就是投影矩陣?
+    /*
+    K^(-1) = [1/fa    0 -w/2a]
+             [   0 1/fa -h/2a]
+             [   0    0     1]
+    */
+    // z/fa*max(w,h)是resolution?
     return (this->worldToCam.mult(point, 1)[2] * this->source_level.invproj[0]);
 }
 
+// 看不懂?
 inline float
 SingleView::footPrintScaled(math::Vec3f const& point)
 {
@@ -184,6 +197,7 @@ SingleView::worldToScreenScaled(math::Vec3f const& point)
     math::Vec3f cp(this->worldToCam.mult(point,1.f));
     math::Vec3f sp = this->target_level.proj * cp;
 
+    // -0.5f是?
     math::Vec2f res(sp[0] / sp[2] - 0.5f, sp[1] / sp[2] - 0.5f);
     return res;
 }

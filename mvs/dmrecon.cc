@@ -183,6 +183,7 @@ DMRecon::start()
  * Attach features that are visible in the reference view (according to
  * the bundle) to all other views if inside the frustum.
  */
+// 對參考視角中可見的特徵點,如果它在其它視角中可見,就將它加入該視角的featInd
 void
 DMRecon::analyzeFeatures()
 {
@@ -305,6 +306,7 @@ DMRecon::processFeatures(){
         math::Vec3f featPos(features[i].pos);
 
         // 特征要在参考视角中可见
+        // 這個檢查跟features[i].contains_view_id(settings.refViewNr)有什麼差別?
         if (!refV->pointInFrustum(featPos))
             continue;
 
@@ -326,6 +328,18 @@ DMRecon::processFeatures(){
         float initDepth = (featPos - refV->camPos).norm();
 
         // 对三维点的深度进行优化，同时得到法向量，深度图，以及优化的可信度
+        /*
+        PatchOptimization(
+        std::vector<SingleView::Ptr> const& _views,
+        Settings const& _settings,
+        int _x,          // Pixel position  像素位置
+        int _y,
+        float _depth,    // depth的深度
+        float _dzI,      // hs(s,t)
+        float _dzJ,      // ht(s.t)
+        IndexSet const& _globalViewIDs,   // 全局的视角
+        IndexSet const& _localViewIDs);   // 局部视角
+        */
         PatchOptimization patch(views, settings, x, y, initDepth,
             0.f, 0.f, neighViews, IndexSet());
         patch.doAutoOptimization();

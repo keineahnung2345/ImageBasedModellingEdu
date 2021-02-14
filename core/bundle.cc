@@ -11,6 +11,7 @@
 
 CORE_NAMESPACE_BEGIN
 
+// 該特徵點是否可被第id個view看到
 bool
 Bundle::Feature3D::contains_view_id (int id) const
 {

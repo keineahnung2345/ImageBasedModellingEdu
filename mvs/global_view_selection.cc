@@ -39,6 +39,7 @@ void GlobalViewSelection::performVS(){
 
     selected.clear();
     bool foundOne = true;
+    // foundOne: 如果在某次迭代過程中都沒有選到視角,就會跳出
     while (foundOne && (selected.size() < settings.globalVSMax/*最多要选择的视角个数*/)){
         float maxBenefit = 0.f;
         std::size_t maxView = 0;
@@ -84,16 +85,22 @@ GlobalViewSelection::benefitFromView(std::size_t i){
         float score = 1.f;
         // Parallax with reference view
         // 特征点的三维坐标
+        // nFeatIDs[k]: feature的id
         math::Vec3f ftPos(features[nFeatIDs[k]].pos);
 
         // 1. 考虑特征点在两个视角间的视差(三维点与相机位置确定的射线间的夹角），如果视差小于一定阈值(10度）
+        // 就降低score
         float plx = parallax(ftPos, refV, tmpV);
         if (plx < settings.minParallax)
             score *= sqr(plx / 10.f);
 
         // 2. 考虑两个视角间的分辨率 Resolution compared to reference view
+        // 為何reference view要scaled,tmp view不用?
+        // mfp: 論文裡的sR(f)
         float mfp = refV->footPrintScaled(ftPos);
+        // nfp: 論文裡的sV(f)
         float nfp = tmpV->footPrint(ftPos);
+        // ratio: 論文裡的ws
         float ratio = mfp / nfp;
         // reference view
         if (ratio > 2.)
@@ -102,8 +109,8 @@ GlobalViewSelection::benefitFromView(std::size_t i){
             ratio = 1.;
         score *= ratio;
 
-        /**计算该特征点与已经选定的视角之间的视差，与任何一个视角的残差小于特定值，都会减少该特征点score
-         * 这样组哟的目的是避免选取图像内容相似的两帧图像
+        /**计算该特征点与已经选定的视角之间的视差，与任何一个视角的視差小于特定值，都会减少该特征点score
+         * 这样的目的是避免选取图像内容相似的两帧图像
          */
         // Parallax with other selected views that see the same feature
         IndexSet::const_iterator citV;
