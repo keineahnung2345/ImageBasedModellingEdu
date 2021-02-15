@@ -470,14 +470,14 @@ DMRecon::processQueue()
             refV->dzImg->at(index, 1) = tmpData.dz_j;
             refV->confImg->at(index) = tmpData.confidence;
 
+            /***
+             * 如果优化后的pixel confidence比neighboring pixel 的confidence好0.05以上， 那么将该pixel的初始化变量赋给
+             * neighboring 像素继续进行优化，交替进行直到neigboring pixels的confidence小于一定的值
+             */
             // left
             tmpData.x = x - 1; tmpData.y = y;
             index = tmpData.y * this->width + tmpData.x;
 
-            /***
-             * 如果优化后的pixel confidence比neighboring pixel 的confidence好0.05以上， 那么将该pixel的初始化变量赋给
-             * neighboring 像素继续进行优化，交替进行指导neigboring pixels的confidence小于一定的值
-             */
             if (refV->confImg->at(index) < tmpData.confidence - 0.05f ||
                 refV->confImg->at(index) == 0.f){
                 prQueue.push(tmpData);

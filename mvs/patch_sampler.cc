@@ -273,13 +273,18 @@ float PatchSampler::getSSD(std::size_t v, math::Vec3f const& cs){
 
 math::Vec3f PatchSampler::getPatchNormal() const{
 
+    // offset: 2
+    // right, left, top, bottom: patch上有代表性的四個點
     std::size_t right = nrSamples/2 + offset;
     std::size_t left = nrSamples/2 - offset;
     std::size_t top = offset;
     std::size_t bottom = nrSamples - 1 - offset;
 
+    // 由左往右
     math::Vec3f a(patchPoints[right] - patchPoints[left]);
+    // 由下往上
     math::Vec3f b(patchPoints[top] - patchPoints[bottom]);
+    // 由相機光心射出?
     math::Vec3f normal(a.cross(b));
     normal.normalize();
 

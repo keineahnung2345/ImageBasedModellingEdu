@@ -148,8 +148,10 @@ float PatchOptimization::computeConfidence(){
     /**2.0 考虑patch的法向量和中心点视线之间的夹角**/
     /* Compute angle between estimated surface normal and view direction
        and weight current score with dot product */
+    // 注釋說要幫score加權重(=dotP),但是code裡沒有?!(論文裡也沒有)
     math::Vec3f viewDir(refV->viewRayScaled(midx, midy));
     math::Vec3f normal(sampler->getPatchNormal());
+    // 負號應該是多出來的?!
     float dotP = - normal.dot(viewDir);
     if (dotP < 0.2f) {
         return 0.f;
@@ -354,6 +356,7 @@ void PatchOptimization::optimizeDepthAndNormal(){
             status.optiSuccess = false;
             return;
         }
+        // 顏色尺度
         math::Vec3f cs(colorScale[*id]);
         // nrSamples: 為5*5=25,相當於把5*5的patch展開成一個向量
         for (std::size_t i = 0; i < nrSamples; ++i) {
@@ -363,6 +366,8 @@ void PatchOptimization::optimizeDepthAndNormal(){
                 a_i[0] = pixel_weight[i] *         cs[c] * nDeriv[i][c];
                 a_i[1] = pixel_weight[i] * ii[i] * cs[c] * nDeriv[i][c];
                 a_i[2] = pixel_weight[i] * jj[i] * cs[c] * nDeriv[i][c];
+                // mCol[i][c]: master patch第i個像素的第c個顏色
+                // cs[c] * nCol[i][c]: neighbor patch第i個像素第c個顏色,scaled
                 float b_i = pixel_weight[i] * (mCol[i][c] - cs[c] * nCol[i][c]);
                 assert(!MATH_ISINF(a_i[0]));
                 assert(!MATH_ISINF(a_i[1]));
