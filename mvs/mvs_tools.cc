@@ -115,12 +115,16 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
 
         /* data position pointer */
         // *3: rgb
+        // p0+3: p0右邊
+        // p1:p0下面
+        // p1+3: p1右邊
         int p0 = (top * width + left) * 3;
         int p1 = ((top+1) * width + left) * 3;
 
         /* bilinear interpolation to determine color value */
         float x0, x1, x2, x3, x4, x5;
         // 權重與距離成反比,所以是:"到右邊界的距離*左邊的顏色值+到左邊界的距離*右邊的顏色值"
+        // 雙線性內插:先在x方向內插一次
         x0 = (1.f-x) * srgb2lin[img.at(p0  )] + x * srgb2lin[img.at(p0+3)];
         x1 = (1.f-x) * srgb2lin[img.at(p0+1)] + x * srgb2lin[img.at(p0+4)];
         x2 = (1.f-x) * srgb2lin[img.at(p0+2)] + x * srgb2lin[img.at(p0+5)];
@@ -129,11 +133,14 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
         x5 = (1.f-x) * srgb2lin[img.at(p1+2)] + x * srgb2lin[img.at(p1+5)];
 
         // 權重與距離成反比,所以是:"到下界的距離*上面的顏色值+到上界的距離*下面的顏色值"
+        // interpolate color
+        // 雙線性內插:然後在y方向內插一次
         color[i][0] = (1.f - y) * x0 + y * x3;
         color[i][1] = (1.f - y) * x1 + y * x4;
         color[i][2] = (1.f - y) * x2 + y * x5;
 
         // todo 梯度为何如此求？？？？
+        // interpolate derivative
         /* derivative in direction gradDir */
         float u = gradDir[i][0];
         float v = gradDir[i][1];
@@ -145,6 +152,29 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
             /*
                 [1  -1]
                 [-1  1]
+            */
+            /*
+            u * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)]) + 
+            u * y * (srgb2lin[img.at(p0)] - srgb2lin[img.at(p0+3)]
+                     - srgb2lin[img.at(p1)] + srgb2lin[img.at(p1+3)])
+            = u * (1-y) * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)]) + 
+            u * y * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p1)])
+            = u * [y * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p1)]) + 
+              (1-y) * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)])]
+            (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p1)])表示兩個像素間顏色的差
+            [y * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p1)]) + 
+              (1-y) * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)])]
+            表示將顏色的插值進行內插,可以想成是導數?
+              
+            v * (srgb2lin[img.at(p1)] - srgb2lin[img.at(p0)]) + 
+            (v * x) * (srgb2lin[img.at(p0)] - srgb2lin[img.at(p0+3)]
+                     - srgb2lin[img.at(p1)] + srgb2lin[img.at(p1+3)])
+            = v * (1-x) * (srgb2lin[img.at(p1)] - srgb2lin[img.at(p0)]) +
+            v * x * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p0+3)])
+            = v * [x * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p0+3)]) + 
+            (1-x) * (srgb2lin[img.at(p1)] - srgb2lin[img.at(p0)])]
+            
+            最後的結果是導數與梯度(u,v)做內積?
             */
             deriv[i][c] =
                 u * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)])
