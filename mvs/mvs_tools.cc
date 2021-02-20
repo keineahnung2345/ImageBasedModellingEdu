@@ -173,8 +173,11 @@ colAndExactDeriv(core::ByteImage const& img, PixelCoords const& imgPos,
             v * x * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p0+3)])
             = v * [x * (srgb2lin[img.at(p1+3)] - srgb2lin[img.at(p0+3)]) + 
             (1-x) * (srgb2lin[img.at(p1)] - srgb2lin[img.at(p0)])]
-            
-            最後的結果是導數與梯度(u,v)做內積?
+            看內層，因為是在y方向上做減法，所以裡面算的是顏色在y方向對深度的倒數
+            然後用左右兩邊算出來的導數做內插
+            所以才會與v相乘
+            先算出來顏色分別在x,y方向的導數然後與梯度(u,v)做內積得到
+            最後的結果是導數與梯度(u,v)做內積,即chain rule
             */
             deriv[i][c] =
                 u * (srgb2lin[img.at(p0+3)] - srgb2lin[img.at(p0)])
