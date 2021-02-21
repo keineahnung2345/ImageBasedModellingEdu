@@ -160,7 +160,7 @@ SingleView::createFileName(float scale) const
 inline float
 SingleView::footPrint(math::Vec3f const& point)
 {
-    // this->worldToCam.mult(point, 1)[2]: 將point轉到相機座標系後看z座標
+    // this->worldToCam.mult(point, 1)[2]: 將point轉到相機座標系後看z座標,也就是深度
     // invproj[0]: 矩陣的第0個元素,是焦距的倒數?
     // 相機內參就是投影矩陣?
     /*
@@ -168,7 +168,7 @@ SingleView::footPrint(math::Vec3f const& point)
              [   0 1/fa -h/2a]
              [   0    0     1]
     */
-    // z/fa*max(w,h)是resolution?
+    // z * (1/f) = r,r是空間中一個球體的半徑,它投影到圖像上長寬為1個像素resolution
     return (this->worldToCam.mult(point, 1)[2] * this->source_level.invproj[0]);
 }
 
