@@ -125,19 +125,40 @@ void
 CameraInfo::fill_calibration (float* mat, float width, float height) const
 {
     float dim_aspect = width / height;
+    // 在CameraInfo::CameraInfo中,this->paspect預設為1
     float image_aspect = dim_aspect * this->paspect;
     float ax, ay;
-    if (image_aspect < 1.0f) /* Portrait. */
+    /*
+     a = max(height, width)
+     像素寬高為1/a
+     如果要將單位為mm的x轉為像素單位,用x除以像素寬高,得x/(1/a) = x*a
+    */
+    if (image_aspect < 1.0f) /* Portrait. */ //直式螢幕
     {
         ax = this->flen * height / this->paspect;
         ay = this->flen * height;
     }
-    else /* Landscape. */
+    else /* Landscape. */ //橫式螢幕
     {
         ax = this->flen * width;
         ay = this->flen * width * this->paspect;
     }
 
+    /*
+    float ppoint[2];
+    Principal point in x- and y-direction.
+    在CameraInfo::CameraInfo中預設皆為0.5
+    */
+    /*
+    在this->paspect為1的情況下:
+    令a = max(height, width)
+        [f*a    0   width/2]
+    K = [  0  f*a  height/2]
+        [  0    0         1]
+    K將單位為mm的(x,y)轉換為單位為像素的(u,v)
+    (u, v) = (f*a*x + u_0, f*a*y + v_0)
+    (u_0, v_0) = (width/2, height/2)
+    */
     mat[0] =   ax; mat[1] = 0.0f; mat[2] = width * this->ppoint[0];
     mat[3] = 0.0f; mat[4] =   ay; mat[5] = height * this->ppoint[1];
     mat[6] = 0.0f; mat[7] = 0.0f; mat[8] = 1.0f;
@@ -183,6 +204,9 @@ CameraInfo::fill_inverse_calibration (float* mat,
     float dim_aspect = width / height;
     float image_aspect = dim_aspect * this->paspect;
     float ax, ay;
+    /*
+    a = max(height, width)
+    */
     if (image_aspect < 1.0f) /* Portrait. */
     {
         ax = this->flen * height / this->paspect;

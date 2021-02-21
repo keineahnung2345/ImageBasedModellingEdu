@@ -45,11 +45,18 @@ FeatureSet::normalize_feature_positions (void)
     /* Normalize image coordinates. */
     float const fwidth = static_cast<float>(this->width);
     float const fheight = static_cast<float>(this->height);
+    // fnorm為width,height中較大者
     float const fnorm = std::max(fwidth, fheight);
     for (std::size_t i = 0; i < this->positions.size(); ++i)
     {
         math::Vec2f& pos = this->positions[i];
         // 往左移半個圖像寬度的距離, +0.5f: 四捨五入?, /fnorm: 縮放至[-0.5, 0.5]
+        /*
+         a = max(width, height)
+         (u, v) = (f*a*x + u_0, f*a*y + v_0)
+         (x, y) = ((u-u_0)/(f*a), (v-v_0)/(f*a))
+         這裡只除了a,沒有除f?
+        */
         pos[0] = (pos[0] + 0.5f - fwidth / 2.0f) / fnorm;
         pos[1] = (pos[1] + 0.5f - fheight / 2.0f) / fnorm;
     }
