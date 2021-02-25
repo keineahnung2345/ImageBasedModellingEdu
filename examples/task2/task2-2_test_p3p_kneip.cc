@@ -96,6 +96,7 @@ void pose_p3p_kneip (
     }
 
     /* Normalize directions if necessary. */
+    // f1, f2, f3在normalize後才是論文裡所說的f1,f2,f3
     double const normalize_epsilon = 1e-10;
     if (!MATH_EPSILON_EQ(f1.square_norm(), 1.0, normalize_epsilon))
         f1.normalize();
@@ -108,17 +109,19 @@ void pose_p3p_kneip (
     /* Create camera frame. */
     math::Matrix3d T;
     {
+        // e1,e2,e3為論文裡tau座標系的basis vector:tx,ty,tz
         math::Vec3d e1 = f1;
         math::Vec3d e3 = f1.cross(f2).normalized();
         math::Vec3d e2 = e3.cross(e1);
         std::copy(e1.begin(), e1.end(), T.begin() + 0);
         std::copy(e2.begin(), e2.end(), T.begin() + 3);
         std::copy(e3.begin(), e3.end(), T.begin() + 6);
-        //怎麼只轉f3?
+        //等一下要用f3在tau座標系下的z座標來判斷平面PI的旋轉角度theta
+        //所以這裡只轉f3
         f3 = T * f3;
     }
 
-    // 希望f3的tz座標小於0,這樣theta才能落在[0,PI]裡?
+    // 希望f3的tz座標小於0,這樣f3才會跟P3一樣都在平面PI的後側,平面PI的旋轉角度theta才能落在[0,PI]裡
     /* Change camera frame and point order if f3[2] > 0. */
     if (f3[2] > 0.0)
     {
@@ -131,7 +134,9 @@ void pose_p3p_kneip (
         std::copy(e1.begin(), e1.end(), T.begin() + 0);
         std::copy(e2.begin(), e2.end(), T.begin() + 3);
         std::copy(e3.begin(), e3.end(), T.begin() + 6);
-        //怎麼只轉f3?
+        //這裡的f3是之前用T左乘過的f3(f3 = T * f3;)
+        //第一次在乘的時候是不是應該備份一下原來的f3?!
+        //或是在T被賦予新的值前,用T的轉置矩陣乘上f3?!
         f3 = T * f3;
     }
 
@@ -139,6 +144,7 @@ void pose_p3p_kneip (
     /* Create world frame. */
     math::Matrix3d N;
     {
+        //論文裡新世界座標系的basis vector:nx,ny,nz
         math::Vec3d n1 = (p2 - p1).normalized();
         math::Vec3d n3 = n1.cross(p3 - p1).normalized();
         math::Vec3d n2 = n3.cross(n1);
@@ -150,6 +156,7 @@ void pose_p3p_kneip (
     p3 = N * (p3 - p1);
 
     /* Extraction of known parameters. */
+    // 論文裡的d_12
     double d_12 = (p2 - p1).norm();
     // 論文裡的phi1
     double f_1 = f3[0] / f3[2];
@@ -160,11 +167,18 @@ void pose_p3p_kneip (
     double p_2 = p3[1];
 
     double cos_beta = f1.dot(f2);
-    // b = cot(beta)
+    // 論文裡的b = cot(beta)
+    // 但是這裡的b = (cot(beta))^2
     double b = 1.0 / (1.0 - MATH_POW2(cos_beta)) - 1;
-    // 這裡的b = (cot(beta))^2
 
-    // cot(beta)的正負號是隨著cos(beta)而變化的
+    // 開根號並決定正負號
+    /*
+    這裡用cos(beta)的正負號決定cot(beta)的正負號,原因如下:
+    beta是向量f1與f2的夾角,我們可以限制它不超過180度
+    觀察第一,二象限的cos正負號:+,-
+    觀察第一,二象限的cot正負號:+,-
+    所以在我們所關心的範圍內,cot是與cos同號的
+    */
     if (cos_beta < 0.0)
         b = -std::sqrt(b);
     else
@@ -182,14 +196,18 @@ void pose_p3p_kneip (
     double d_12_pw2 = MATH_POW2(d_12);
     double b_pw2 = MATH_POW2(b);
 
+    // cos(theta)的四次多項式的係數
     /* Factors of the 4th degree polynomial. */
     math::Vec5d factors;
+    // a4
     factors[0] = - f_2_pw2 * p_2_pw4 - p_2_pw4 * f_1_pw2 - p_2_pw4;
 
+    // a3
     factors[1] = 2.0 * p_2_pw3 * d_12 * b
                  + 2.0 * f_2_pw2 * p_2_pw3 * d_12 * b
                  - 2.0 * f_2 * p_2_pw3 * f_1 * d_12;
 
+    // a2
     factors[2] = - f_2_pw2 * p_2_pw2 * p_1_pw2
                  - f_2_pw2 * p_2_pw2 * d_12_pw2 * b_pw2
                  - f_2_pw2 * p_2_pw2 * d_12_pw2
@@ -202,11 +220,13 @@ void pose_p3p_kneip (
                  - p_2_pw2 * d_12_pw2 * b_pw2
                  - 2.0 * p_1_pw2 * p_2_pw2;
 
+    // a1
     factors[3] = 2.0 * p_1_pw2 * p_2 * d_12 * b
                  + 2.0 * f_2 * p_2_pw3 * f_1 * d_12
                  - 2.0 * f_2_pw2 * p_2_pw3 * d_12 * b
                  - 2.0 * p_1 * p_2 * d_12_pw2 * b;
 
+    // a0
     factors[4] = -2.0 * f_2 * p_2_pw2 * f_1 * p_1 * d_12 * b
                  + f_2_pw2 * p_2_pw2 * d_12_pw2
                  + 2.0 * p_1_pw3 * d_12
@@ -227,46 +247,53 @@ void pose_p3p_kneip (
     solutions->resize(4);
     for (int i = 0; i < 4; ++i)
     {
-        //分子分母都比論文裡多了一個-1,結果是一樣的
+        // 論文公式(9):由cos(theta)得到cot(alpha)
+        // 分子分母都比論文裡多了一個-1,結果是一樣的
         double cot_alpha = (-f_1 * p_1 / f_2 - real_roots[i] * p_2 + d_12 * b)
                            / (-f_1 * real_roots[i] * p_2 / f_2 + p_1 - d_12);
 
         double cos_theta = real_roots[i];
+        // 因為限制theta小於180度,所以sin(theta)必為正值
         double sin_theta = std::sqrt(1.0 - MATH_POW2(real_roots[i]));
         // cot = cos/sin, cot^2+1 = cos^2/sin^2+1 = 1/sin^2
+        // alpha是三角形CP1P2中P1的角,所以小於180度
+        // sin(alpha)必為正值
         double sin_alpha = std::sqrt(1.0 / (MATH_POW2(cot_alpha) + 1));
+        // 取決於alpha是否大於90度,cos(alpha)可能為正或負
         double cos_alpha = std::sqrt(1.0 - MATH_POW2(sin_alpha));
 
-        //?
+        // 決定cos(alpha)的正負號
+        // 在一二象限cot(alpha)與cos(alpha)同號
         if (cot_alpha < 0.0)
             cos_alpha = -cos_alpha;
 
-        // 論文公式(5)
+        // 論文公式(5): C^eta(alpha, theta)
         // 相機中心在新世界座標系裡的表達
         math::Vec3d C(
                 d_12 * cos_alpha * (sin_alpha * b + cos_alpha),
                 cos_theta * d_12 * sin_alpha * (sin_alpha * b + cos_alpha),
                 sin_theta * d_12 * sin_alpha * (sin_alpha * b + cos_alpha));
 
+        // 論文公式(12): 相機中心在原始世界座標系下的表達
         // 新世界 to 原始世界座標系
         C = p1 + N.transposed() * C;
 
-        // 論文公式(6), Q
+        // 論文公式(6): 由新世界座標系到新相機座標系的旋轉矩陣,Q(alpha, theta)
         math::Matrix3d R;
         R[0] = -cos_alpha; R[1] = -sin_alpha * cos_theta; R[2] = -sin_alpha * sin_theta;
         R[3] = sin_alpha;  R[4] = -cos_alpha * cos_theta; R[5] = -cos_alpha * sin_theta;
         R[6] = 0.0;        R[7] = -sin_theta;             R[8] = cos_theta;
 
-        // 論文公式(13)
-        // 由原始相機座標系到原始世界座標系
+        // 論文公式(13): 由原始相機座標系到原始世界座標系的旋轉矩陣
+        // 看論文圖(1): R的定義確實是這樣的
         R = N.transposed().mult(R.transposed()).mult(T);
 
         /* Convert camera position and cam-to-world rotation to pose. */
-        // C_cam = R*C_world+t -> C_world = R^T*(C_cam-t)?
-        // C_world = R*C_cam+t -> C_cam = R^T*(C_world-t)?
-        // 由原始世界座標系到原始相機座標系
+        // Xc = R*Xw+t -> Xw = R^T*Xc - R^T*t, Xc:某點在相機座標系下的表達,Xw:在世界座標系下的表達
+        // Xc = R*O+t -> t = Xc, 又Cc = 0, 所以Cw = R^T*Cc - R^T*t = -R^T*Xc
+        // R:原相機到原世界,R^T:原世界到原相機
         R = R.transposed();
-        // 負號是?
+        // 相機中心在世界座標系下表達
         C = -R * C;
 
         // 每個solution是由原始世界座標系到原始相機座標系及相機中心在世界座標系裡的表達?
@@ -387,7 +414,8 @@ int main(int argc, char*argv[]){
         math::Vec4d p3d(p4[0], p4[1], p4[2], 1.0);
         // solutions[j] * p3d: 由原世界到原相機
         // 有了原世界到原相機座標系的轉換之後,再套用第一章的針孔相機模型公式即可
-        // k_matrix * : 由歸一化像平面到圖像(不用先除以zc,由相機座標系到歸一化像平面?)
+        // 課件裡是先除以zc再乘k_matrix,這裡是先乘k_matrix
+        // k_matrix * : 由歸一化像平面到圖像
         math::Vec3d p2d = k_matrix * (solutions[j] * p3d);
         //p2d[0] / p2d[2], p2d[1] / p2d[2]: 除以zc,由相機座標系到歸一化像平面
         //重投影誤差
