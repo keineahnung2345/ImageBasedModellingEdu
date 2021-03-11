@@ -45,7 +45,7 @@ public:
         // array of the node's children, each node has 8 children
         Node* children;
 
-        // pointer to the node's array, each node has 1 parent
+        // pointer to the node's parent, each node has 1 parent
         Node* parent;
 
         // used for marching cube
@@ -185,6 +185,7 @@ public:
      * Limits the octree to the max level. This must be called before
      * computing the implicit function or isosurface extraction.
      */
+    // isosurface: 等值面
     void limit_octree_level (void);
 
     /**

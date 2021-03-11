@@ -44,6 +44,7 @@ Octree::Iterator::first_leaf (void) {
         // set the current node as the first chidren
         this->current = this->current->children;
         this->level = this->level + 1;
+        // 一直往左邊找path會是0,應該不算bug
         this->path = this->path << 3; // equals to multiply it as 8. fixMe? path will always be 0!!
     }
     return this->current;
@@ -53,12 +54,14 @@ Octree::Iterator::first_leaf (void) {
 Octree::Node*
 Octree::Iterator::next_node (void)
 {
+    // 拜訪順序:祖父-父親-子-父親的弟弟-父親的弟弟的兒子
     // if the current node has no children, then switch to next branch
     if (this->current->children == nullptr)
         return this->next_branch();
 
     this->current = this->current->children;
     this->level = this->level + 1;
+    // 空出最後一位數,等會要填上?
     this->path = this->path << 3;
     return this->current;
 }
@@ -68,13 +71,15 @@ Octree::Node*
 Octree::Iterator::next_bread_first(void)
 {
     /*todo implement bread first search here*/
-
+    // 拜訪順序:祖父-父親-父親的弟弟-子-父親的弟弟的兒子
 }
 
+// 尋找同一層(?)的下一個sibling?
 Octree::Node*
 Octree::Iterator::next_branch (void) {
 
     // root node has no branch, nullptr will be returned
+    // 如果是root就返回nullptr
     if (this->current->parent == nullptr) {
         this->current = nullptr;
         return nullptr;
@@ -82,6 +87,11 @@ Octree::Iterator::next_branch (void) {
 
     // current node is the last child, then switch to the next
     // branch in a recursive way
+    /*
+    this->current->parent->children指向第一個孩子
+    如果this->current與它的距離為7,表示它是parent的第8個孩子
+    這時候要找父親的弟弟(不是父親的弟弟的孩子?)
+    */
     if (this->current - this->current->parent->children == 7) {
         this->current = this->current->parent;
         this->level = this->level - 1;
@@ -91,6 +101,7 @@ Octree::Iterator::next_branch (void) {
 
     // if the current node is the inner child, then the next branch
     // is indeed the next child
+    // 找弟弟
     this->current += 1;
     this->path += 1;
     return this->current;
@@ -113,6 +124,7 @@ Octree::Iterator::next_leaf (void) {
     }
 
     // if the current node is a leaf node, switch to next branch
+    // 找弟弟或父親的弟弟
     this->next_branch();
     if (this->current == nullptr)
         return nullptr;
