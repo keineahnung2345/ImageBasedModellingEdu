@@ -91,6 +91,7 @@ Octree::Iterator::next_branch (void) {
     this->current->parent->children指向第一個孩子
     如果this->current與它的距離為7,表示它是parent的第8個孩子
     這時候要找父親的弟弟(不是父親的弟弟的孩子?)
+    如果父親沒有弟弟,會找父親的父親的弟弟
     */
     if (this->current - this->current->parent->children == 7) {
         this->current = this->current->parent;
@@ -219,10 +220,13 @@ Octree::insert_sample (Sample const& sample)
     }
 
     /* Find node by expanding the root or descending the tree. */
+    // 尋找適合存放sample的node
     Node* node = nullptr;
     if (sample.scale >= this->root_size * 2.0)
+        // 往尺度大的地方找
         node = this->find_node_expand(sample);
     else
+        // 往尺度相當或較小的地方找
         node = this->find_node_descend(sample, this->get_iterator_for_root());
 
     node->samples.push_back(sample);
@@ -260,9 +264,11 @@ Octree::expand_root_for_point (math::Vec3d const& pos)
     // current root is the octant child of the new create root
     int octant = 0;
     for (int i = 0; i < 3; ++i) {
+        // 往pos[i]所在的方向擴張
         if (pos[i] > this->root_center[i]) {
             this->root_center[i] += this->root_size / 2.0;
         } else {
+            // 往左邊擴張,所以老octant是新octant右邊的孩子,octant在第i個維度的值為1
             octant |= (1 << i);
             this->root_center[i] -= this->root_size / 2.0;
         }
@@ -273,15 +279,19 @@ Octree::expand_root_for_point (math::Vec3d const& pos)
     /* Create new root. */
     Node* new_root = new Node();
     this->create_children(new_root);
+    // 把當前root所擁有的children,samples複製給new_root的第octant個孩子
     std::swap(new_root->children[octant].children, this->root->children);
     std::swap(new_root->children[octant].samples, this->root->samples);
     delete this->root;
+    // this->root現在變為剛剛設好的new_root
     this->root = new_root;
 
     /* Fix parent pointers of old child nodes. */
     if (this->root->children[octant].children != nullptr)
     {
+        // 當前節點的孩子
         Node* children = this->root->children[octant].children;
+        // 當前節點的孩子的父親是當前節點
         for (int i = 0; i < 8; ++i)
             children[i].parent = this->root->children + octant;
     }
@@ -290,10 +300,12 @@ Octree::expand_root_for_point (math::Vec3d const& pos)
 Octree::Node*
 Octree::find_node_descend (Sample const& sample, Iterator const& iter)
 {
+    // valid when: sample.scale小於等於node_size * 2.0
     math::Vec3d node_center;
     double node_size;
     this->node_center_and_size(iter, &node_center, &node_size);
 
+    // scale那麼大就不必往下找
     if (sample.scale > node_size * 2.0)
         throw std::runtime_error("find_node_descend(): Sanity check failed!");
 
@@ -303,10 +315,14 @@ Octree::find_node_descend (Sample const& sample, Iterator const& iter)
      * must not be called if s >= scale(l) * 2. If the current level is
      * the maximum allowed level, return this node also. Descend otherwise.
      */
+    // 如果s大於node_size,停在這個level就行,不必繼續往下找
+    // 如果iter.level太深,也是停在這個level
     if (node_size <= sample.scale || iter.level >= this->max_level)
         return iter.current;
 
     /* Descend octree. Find octant and create children if required. */
+    // 還要繼續往下,所以先創造它的孩子
+    // octant: 第幾個孩子,由sample.pos與node_center的相對位置來決定
     int octant = 0;
     for (int i = 0; i < 3; ++i)
         if (sample.pos[i] > node_center[i])
@@ -319,6 +335,7 @@ Octree::find_node_descend (Sample const& sample, Iterator const& iter)
 Octree::Node*
 Octree::find_node_expand (Sample const& sample)
 {
+    // 如果sample.scale比較小,就用不著expand
     if (this->root_size > sample.scale)
         throw std::runtime_error("find_node_expand(): Sanity check failed!");
 
@@ -327,10 +344,15 @@ Octree::find_node_expand (Sample const& sample)
      * scale(l) <= scale < scale(l) * 2. As a sanity check, this function
      * must not be called if scale(l) > s. Otherwise expand.
      */
+    // 前面已經確定了sample.scale大於等於this->root_size,
+    // 即scale >= scale(l)
     if (sample.scale < this->root_size * 2.0)
         return this->root;
 
+    // 到這邊sample.scale >= this->root_size * 2.0,
+    // 所以要expand
     this->expand_root_for_point(sample.pos);
+    // recursive地往外找
     return this->find_node_expand(sample);
 }
 
@@ -368,13 +390,19 @@ void
 Octree::node_center_and_size (Iterator const& iter,
     math::Vec3d* center, double *size) const
 {
+    // 獲取iter所指向的octant處的center及size
     *center = this->root_center;
     *size = this->root_size;
     for (int i = 0; i < iter.level; ++i)
     {
+        // 每一個level佔用3個bit來表示path
+        // iter.level - i - 1不會變負的?
+        // octant表示iter.path在第i個level的序號?
         int const octant = iter.path >> ((iter.level - i - 1) * 3);
+        // 除以4?
         double const offset = *size / 4.0;
         for (int j = 0; j < 3; ++j)
+            // ((octant & (1 << j)): octant在第j個維度上是在左還是右
             (*center)[j] += ((octant & (1 << j)) ? offset : -offset);
         *size /= 2.0;
     }
@@ -450,6 +478,7 @@ Octree::influence_query (math::Vec3d const& pos, double factor,
 void
 Octree::refine_octree (void)
 {
+    // 希望octree是full的
     if (this->root == nullptr)
         return;
 
@@ -461,6 +490,7 @@ Octree::refine_octree (void)
         queue.pop_front();
 
         if (node->children == nullptr)
+            // 對於octree中的inner node要加入孩子
             this->create_children(node);
         else
             for (int i = 0; i < 8; ++i)
@@ -483,10 +513,12 @@ void
 Octree::limit_octree_level (Node* node, Node* parent, int level)
 {
     if (level == this->max_level)
+        // 這樣在下一次遞迴的時候它的孩子才會把samples送給它
         parent = node;
 
     if (level > this->max_level)
     {
+        // 把node的samples都移到parent那邊去
         parent->samples.insert(parent->samples.end(),
             node->samples.begin(), node->samples.end());
         node->samples.clear();
@@ -494,11 +526,14 @@ Octree::limit_octree_level (Node* node, Node* parent, int level)
 
     if (node->children != nullptr)
         for (int i = 0; i < 8; ++i)
+            // 限制每個孩子的level
             this->limit_octree_level(node->children + i, parent, level + 1);
 
+    // 為何不跟上面合併?
     if (level > this->max_level)
         this->num_nodes -= 1;
 
+    // node是最後一層,不應該有小孩
     if (level == this->max_level)
     {
         delete [] node->children;

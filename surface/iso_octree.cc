@@ -38,7 +38,7 @@ IsoOctree::compute_voxels (void)
 void
 IsoOctree::compute_all_voxels (void)
 {
-    /* Locate all leafs and store voxels in a vector. */
+    /* Locate all leaves and store voxels in a vector. */
     std::cout << "Computing sampling of the implicit function..." << std::endl;
     {
         /* Make voxels unique by storing them in a set first. */

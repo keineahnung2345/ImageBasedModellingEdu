@@ -45,6 +45,8 @@ VoxelIndex::compute_position (math::Vec3d const& center, double size) const
     double const fx = static_cast<double>(this->get_offset_x()) / dim_max;
     double const fy = static_cast<double>(this->get_offset_y()) / dim_max;
     double const fz = static_cast<double>(this->get_offset_z()) / dim_max;
+    // 中心點 - size / 2.0 = 左上前角
+    // 左上前角 + (fx, fy, fz) = 所關注的點
     return center - size / 2.0 + math::Vec3d(fx, fy, fz) * size;
 }
 
