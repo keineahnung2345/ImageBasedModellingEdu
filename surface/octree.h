@@ -101,6 +101,11 @@ public:
 
         // the depth of the current node
         uint8_t level;
+
+    private:
+        // (Node*, level, path)
+        std::vector<std::tuple<fssr::Octree::Node*, uint8_t, uint64_t> > bfs_queue;
+        int bfs_idx;
     };
 
 public:

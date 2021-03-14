@@ -50,7 +50,7 @@ private:
     VoxelData sample_ifn (math::Vec3d const& voxel_pos);
     void print_progress (std::size_t voxels_done, std::size_t voxels_total);
 
-private:
+public:
     VoxelVector voxels;
 };
 

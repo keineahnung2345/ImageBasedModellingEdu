@@ -15,6 +15,7 @@
 #include "util/timer.h"
 #include "core/mesh_io.h"
 #include "surface/octree.h"
+#include <queue>
 
 FSSR_NAMESPACE_BEGIN
 
@@ -29,6 +30,9 @@ Octree::Iterator::first_node (void) {
 
     // path of the root node is 0
     this->path = 0;
+
+    // the index of node when doing bfs
+    this->bfs_idx = 0;
 
     return this->current;
 }
@@ -69,6 +73,39 @@ Octree::Iterator::next_bread_first(void)
 {
     /*todo implement bread first search here*/
 
+    if(this->bfs_queue.empty()){
+        // build data structure required for bfs: bfs_queue and bfs_idx
+
+        this->bfs_idx = 0;
+        fssr::Octree::Node* cur_node = this->root;
+        uint8_t cur_level = 0;
+        uint64_t cur_path = 0;
+
+        this->bfs_queue.push_back(std::make_tuple(cur_node, cur_level, cur_path));
+
+        while(this->bfs_idx != this->bfs_queue.size()){
+            std::tie(cur_node, cur_level, cur_path) = this->bfs_queue[this->bfs_idx++];
+            
+            // + has higher precedence than << !!
+            if(cur_node->children){
+                for(int i = 0; i < 8; ++i){
+                    this->bfs_queue.push_back(
+                        std::make_tuple(cur_node->children+i, cur_level + 1, (cur_path << 3) | i));
+                }
+            }
+        }
+
+        this->bfs_idx = 0;
+    }
+
+    /*
+    increase bfs_idx first! because this function is used like this:
+    for (iter.first_node(); iter.current != nullptr; iter.next_bread_first()){
+        std::cout << "path: " << iter.path << ", level: " << iter.level << std::endl;
+    }
+    */
+    std::tie(this->current, this->level, this->path) = this->bfs_queue[++this->bfs_idx];
+    return this->current;
 }
 
 Octree::Node*
