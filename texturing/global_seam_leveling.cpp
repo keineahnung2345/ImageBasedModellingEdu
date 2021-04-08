@@ -48,6 +48,7 @@ find_seam_edges_for_vertex_label_combination(UniGraph const & graph, core::Trian
     core::VertexInfoList::ConstPtr vertex_infos, std::size_t vertex, std::size_t label1, std::size_t label2,
     std::vector<MeshEdge> * seam_edges) {
 
+    // vertex: 橫跨被標為label1及label2的兩個面
     assert(label1 != 0 && label2 != 0 && label1 < label2);
 
     // all the vertices
@@ -60,6 +61,7 @@ find_seam_edges_for_vertex_label_combination(UniGraph const & graph, core::Trian
         std::size_t adj_vertex = adj_verts[i];
         if (vertex == adj_vertex) continue;
 
+        // 同時與vertex, adj_vertex相鄰的面
         std::vector<std::size_t> edge_faces;
         vertex_infos->get_faces_for_edge(vertex, adj_vertex, &edge_faces);
 
@@ -70,6 +72,7 @@ find_seam_edges_for_vertex_label_combination(UniGraph const & graph, core::Trian
                 std::size_t face_label2 = graph.get_label(edge_faces[k]);
                 if (!(face_label1 < face_label2)) std::swap(face_label1, face_label2);
 
+                // vertex及adj_vertex必須一樣都是橫跨label1及label2
                 if (face_label1 != label1 || face_label2 != label2) continue;
 
                 math::Vec3f v1 = vertices[vertex];
@@ -236,11 +239,15 @@ global_seam_leveling(UniGraph const & graph,
 
                     if (seam_edges.empty()) continue;
 
+                    // g1 - g2
+                    // 矩陣A[A_row] = [0, 0, 0, ..., 1, ... -1, 0, 0, 0]
+                    // 其中A[A_row][vertlabel2row[i][label1]]處為1,A[A_row][vertlabel2row[i][label2]]處為-1
                     Eigen::Triplet<float, int> t1(A_row, vertlabel2row[i][label1], 1.0f);
                     Eigen::Triplet<float, int> t2(A_row, vertlabel2row[i][label2], -1.0f);
                     coefficients_A.push_back(t1);
                     coefficients_A.push_back(t2);
 
+                    // f1 - f2
                     coefficients_b.push_back(calculate_difference(vertex_projection_infos, mesh, *texture_patches, seam_edges, label1, label2));
 
                     ++A_row;

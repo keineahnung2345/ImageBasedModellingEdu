@@ -176,12 +176,15 @@ void
 VertexInfoList::get_faces_for_edge (std::size_t v1, std::size_t v2,
     std::vector<std::size_t>* afaces) const
 {
+    // 與v1相鄰的面
     MeshVertexInfo::FaceRefList const& faces1 = this->at(v1).faces;
+    // 與v2相鄰的面
     MeshVertexInfo::FaceRefList const& faces2 = this->at(v2).faces;
     std::set<std::size_t> faces2_set(faces2.begin(), faces2.end());
     for (std::size_t i = 0; i < faces1.size(); ++i)
     {
         if (faces2_set.find(faces1[i]) != faces2_set.end())
+            // 同時與v1,v2相鄰的面
             afaces->push_back(faces1[i]);
     }
 }

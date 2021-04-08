@@ -24,6 +24,7 @@ math::Vec3f simple_laplacian(int i, core::FloatImage::ConstPtr img){
     const int width = img->width();
     assert(i > width + 1 && i < img->get_pixel_amount() - width -1);
 
+    // 散度計算方式:-4*中間+上+左+右+下
     return -4.0f * math::Vec3f(&img->at(i, 0))
         + math::Vec3f(&img->at(i - width, 0))
         + math::Vec3f(&img->at(i - 1, 0))
@@ -94,10 +95,15 @@ poisson_blend(core::FloatImage::ConstPtr src, core::ByteImage::ConstPtr mask,
         }
 
         if (mask->at(i) == 255) {
+            // 上
             const int i01 = indices->at(i - width);
+            // 左
             const int i10 = indices->at(i - 1);
+            // 關注的像素
             const int i11 = indices->at(i);
+            // 右
             const int i12 = indices->at(i + 1);
+            // 下
             const int i21 = indices->at(i + width);
 
             /* All neighbours should be eighter border conditions or part of the optimization. */
