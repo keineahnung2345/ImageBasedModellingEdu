@@ -10,8 +10,7 @@
 #include <cstring>
 #include <cerrno>
 #include <cstdlib>
-#include <cassert>
-
+#include <cassert>
 #include "core/depthmap.h"
 #include "core/mesh_info.h"
 #include "core/mesh_io.h"
